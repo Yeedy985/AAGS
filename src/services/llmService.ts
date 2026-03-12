@@ -450,10 +450,30 @@ export async function analyzeSignals(
   };
 }
 
-// ==================== 存储结果 ====================
-export async function saveSignalEvents(events: SignalEvent[], alerts: EventAlert[]) {
-  if (events.length > 0) {
-    await db.signalEvents.bulkAdd(events);
+// ==================== 存储结果 (合并硬信号) ====================
+export async function saveSignalEvents(softEvents: SignalEvent[], alerts: EventAlert[]) {
+  // 采集硬信号并与 LLM 软信号合并
+  let hardEvents: SignalEvent[] = [];
+  try {
+    const { collectAndEvaluateHardSignals } = await import('./hardSignalEngine');
+    const { events: hEvents } = await collectAndEvaluateHardSignals();
+    hardEvents = hEvents;
+    if (hardEvents.length > 0) {
+      console.log(`[saveSignalEvents] 硬信号: ${hardEvents.length} 条, 软信号: ${softEvents.length} 条`);
+    }
+  } catch (e: any) {
+    console.warn('[saveSignalEvents] 硬信号采集失败:', e.message);
+  }
+
+  // 同一 signalId 硬信号优先 (API数据比LLM判断更可靠)
+  const hardIds = new Set(hardEvents.map(e => e.signalId));
+  const mergedEvents = [
+    ...hardEvents,
+    ...softEvents.filter(e => !hardIds.has(e.signalId)),
+  ];
+
+  if (mergedEvents.length > 0) {
+    await db.signalEvents.bulkAdd(mergedEvents);
   }
   if (alerts.length > 0) {
     await db.eventAlerts.bulkAdd(alerts);

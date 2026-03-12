@@ -16,6 +16,7 @@ import type {
   SignalEvent, EventAlert, AlertLevel, SignalGroup,
 } from '../types';
 import { notifyAlert } from './notificationService';
+import { collectAndEvaluateHardSignals } from './hardSignalEngine';
 
 const isDev = import.meta.env.DEV;
 
@@ -221,11 +222,11 @@ export async function saveBriefing(briefing: ScanBriefing, overrideTimestamp?: n
 
   const now = overrideTimestamp || Date.now();
 
-  // 转换为 SignalEvent 存入评分系统
+  // 转换 LLM 软信号为 SignalEvent
   const signalDefs = await db.signalDefinitions.toArray();
   const defMap = new Map(signalDefs.map(s => [s.signalId, s]));
 
-  const events: SignalEvent[] = briefing.triggeredSignals.map(t => {
+  const softEvents: SignalEvent[] = briefing.triggeredSignals.map(t => {
     const def = defMap.get(t.signalId);
     return {
       signalId: t.signalId,
@@ -241,6 +242,23 @@ export async function saveBriefing(briefing: ScanBriefing, overrideTimestamp?: n
     };
   }).filter(e => e.impact !== 0);
 
+  // 采集硬信号 (API直连数据，毫秒级)
+  let hardEvents: SignalEvent[] = [];
+  try {
+    const { events: hEvents } = await collectAndEvaluateHardSignals();
+    hardEvents = hEvents;
+    console.log(`[saveBriefing] 硬信号: ${hardEvents.length} 条, 软信号: ${softEvents.length} 条`);
+  } catch (e: any) {
+    console.warn('[saveBriefing] 硬信号采集失败，仅用LLM软信号:', e.message);
+  }
+
+  // 合并: 同一 signalId 硬信号优先 (数据更可靠)
+  const hardSignalIds = new Set(hardEvents.map(e => e.signalId));
+  const mergedEvents = [
+    ...hardEvents,
+    ...softEvents.filter(e => !hardSignalIds.has(e.signalId)),
+  ];
+
   const alerts: EventAlert[] = briefing.alerts.map(a => ({
     title: a.title,
     description: a.description,
@@ -254,10 +272,10 @@ export async function saveBriefing(briefing: ScanBriefing, overrideTimestamp?: n
   }));
 
   // 存入 DB
-  if (events.length > 0) await db.signalEvents.bulkAdd(events);
+  if (mergedEvents.length > 0) await db.signalEvents.bulkAdd(mergedEvents);
   if (alerts.length > 0) await db.eventAlerts.bulkAdd(alerts);
 
-  return { events, alerts };
+  return { events: mergedEvents, alerts };
 }
 
 // ==================== 自动通知 ====================

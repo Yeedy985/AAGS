@@ -352,9 +352,40 @@ export const SIGNAL_MATRIX: SigDef[] = [
 ];
 
 // ==================== 评分引擎 ====================
+/**
+ * 缩放因子设计思路 (v2):
+ *
+ * 三维评分均使用 tanh 压缩，确保输出在合理区间内不轻易饱和:
+ *
+ * SD (方向 [-100, +100]):
+ *   缩放因子 = 80。单次扫描通常触发 3-8 个 D 类信号，impact * confidence 累加
+ *   典型值约 ±15~±40 → tanh(30/80)=0.36 → SD≈36，合理。
+ *   极端行情(多个强信号同向叠加)累加到 ±100+ → tanh(120/80)=0.83 → SD≈83。
+ *   只有历史级别事件(FOMC降息50bp+ETF批准+多重利好)才能推到 90+。
+ *
+ * SV (波动 [0, 100]):
+ *   缩放因子 = 30。V 类信号较少(VIX/资金费率/IV等)，通常 2-4 个触发，
+ *   典型累加 5-15 → tanh(10/30)=0.32 → SV≈32。
+ *   极端波动(多项同时异常) 40+ → tanh(40/30)=0.87 → SV≈87。
+ *
+ * SR (风险 [0, 100]):
+ *   缩放因子 = 50。R 类信号数量多但日常只触发少量低级别风险，
+ *   典型累加 5-20 → tanh(12/50)=0.24 → SR≈24，日常低风险。
+ *   中度风险(交易所问题+杠杆高) 30-50 → tanh(40/50)=0.66 → SR≈66。
+ *   黑天鹅(交易所倒闭+稳定币脱锚) 100+ → tanh(120/50)=0.98 → SR≈98。
+ */
+const SCALE_D = 80;   // 方向缩放因子
+const SCALE_V = 30;   // 波动缩放因子
+const SCALE_R = 50;   // 风险缩放因子
+
 export class SentinelScoringEngine {
   /**
-   * 核心评分算法 — 遍历活跃信号事件，执行指数时间衰减 + 置信度加权 + tanh状态压缩
+   * 核心评分算法 v2 — 指数时间衰减 + 置信度加权 + 全维度 tanh 压缩
+   *
+   * 改进点 (v1 → v2):
+   * 1. SV/SR 从线性截断改为 tanh 压缩，避免日常信号轻易打满 100
+   * 2. SD 缩放因子从 50→80，方向评分在非极端行情下更居中、更有区分度
+   * 3. 三维评分分布更合理: 日常 SD±20~40, SV 10~35, SR 5~25
    */
   static calculateScores(events: SignalEvent[]): ScoringResult {
     let sD = 0, sV = 0, sR = 0;
@@ -380,11 +411,13 @@ export class SentinelScoringEngine {
       }
     }
 
-    // tanh 压缩方向分到 [-100, +100]
-    const scoreDirection = Math.tanh(sD / 50) * 100;
-    // 波动和风险裁剪到 [0, 100]
-    const scoreVolatility = Math.min(100, Math.max(0, sV));
-    const scoreRisk = Math.min(100, Math.max(0, sR));
+    // 全维度 tanh 压缩
+    // SD: [-100, +100], 正=看多, 负=看空
+    const scoreDirection = Math.tanh(sD / SCALE_D) * 100;
+    // SV: [0, 100], 越高=波动越大
+    const scoreVolatility = Math.tanh(sV / SCALE_V) * 100;
+    // SR: [0, 100], 越高=风险越大
+    const scoreRisk = Math.tanh(sR / SCALE_R) * 100;
 
     return {
       scoreDirection: Math.round(scoreDirection * 100) / 100,
@@ -396,35 +429,40 @@ export class SentinelScoringEngine {
   }
 
   /**
-   * 网格自动调参 — 根据 (SD, SV, SR) 映射为网格参数
+   * 网格自动调参 v2 — 根据 (SD, SV, SR) 映射为网格参数
+   *
+   * 阈值已适配 tanh 压缩后的评分分布:
+   * - SV 日常 10-35, 中等 35-60, 极端 60+
+   * - SD 日常 ±10~35, 明确方向 ±35+
+   * - SR 日常 5-25, 中度 25-60, 高危 60+
    */
   static mapToGridParams(scores: ScoringResult): GridAutoParams {
     const { scoreDirection: sd, scoreVolatility: sv, scoreRisk: sr } = scores;
 
-    // 间距策略
+    // 间距策略 (适配 tanh 后的 SV 分布)
     let spacing: number;
     let spacingMode: 'narrow' | 'standard' | 'defensive';
-    if (sv < 30) {
+    if (sv < 25) {
       spacing = 1.0; spacingMode = 'narrow';
-    } else if (sv <= 70) {
+    } else if (sv <= 55) {
       spacing = 1.5; spacingMode = 'standard';
     } else {
       spacing = 2.5; spacingMode = 'defensive';
     }
 
-    // 倾斜策略
+    // 倾斜策略 (适配 tanh 后的 SD 分布)
     let buyRatio: number, sellRatio: number;
     let skewMode: 'bullish' | 'neutral' | 'bearish';
-    if (sd > 40) {
+    if (sd > 30) {
       buyRatio = 0.75; sellRatio = 0.25; skewMode = 'bullish';
-    } else if (sd < -40) {
+    } else if (sd < -30) {
       buyRatio = 0.25; sellRatio = 0.75; skewMode = 'bearish';
     } else {
       buyRatio = 0.5; sellRatio = 0.5; skewMode = 'neutral';
     }
 
-    // 熔断策略
-    const circuitBreak = sr > 85;
+    // 熔断策略 (适配 tanh 后的 SR 分布, 70+ 才是真正高危)
+    const circuitBreak = sr > 70;
 
     return {
       spacing, spacingMode, buyRatio, sellRatio, skewMode, circuitBreak,

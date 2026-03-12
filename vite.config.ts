@@ -42,6 +42,12 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/proxy\/binance/, ''),
         secure: true,
       },
+      '/proxy/binance-futures': {
+        target: 'https://fapi.binance.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/proxy\/binance-futures/, ''),
+        secure: true,
+      },
       '/proxy/okx': {
         target: 'https://www.okx.com',
         changeOrigin: true,
