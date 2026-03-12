@@ -20,6 +20,7 @@ class AAGSDatabase extends Dexie {
   notificationConfigs!: Table<NotificationConfig>;
   publicServiceConfigs!: Table<PublicServiceConfig>;
   scanBriefings!: Table<ScanBriefing>;
+  scanFailures!: Table<{ id?: number; timestamp: number; reason: string; errorDetail: string; mode: string }>;
 
   constructor() {
     super('aags-db');
@@ -91,6 +92,24 @@ class AAGSDatabase extends Dexie {
       notificationConfigs: '++id, channel, enabled',
       publicServiceConfigs: '++id, enabled',
       scanBriefings: '++id, briefingId, mode, timestamp, receivedAt, notified',
+    });
+
+    // v6: 扫描失败记录
+    this.version(6).stores({
+      apiConfigs: '++id, label, exchange',
+      strategies: '++id, symbol, status, createdAt',
+      gridOrders: '++id, strategyId, layer, status, binanceOrderId',
+      tradeRecords: '++id, strategyId, layer, timestamp',
+      equitySnapshots: '++id, strategyId, timestamp',
+      signalDefinitions: '++id, signalId, group, category, enabled',
+      signalEvents: '++id, signalId, group, category, triggeredAt',
+      scoringResults: '++id, timestamp',
+      eventAlerts: '++id, level, group, notified, createdAt',
+      llmConfigs: '++id, provider, enabled',
+      notificationConfigs: '++id, channel, enabled',
+      publicServiceConfigs: '++id, enabled',
+      scanBriefings: '++id, briefingId, mode, timestamp, receivedAt, notified',
+      scanFailures: '++id, timestamp, reason',
     });
   }
 }

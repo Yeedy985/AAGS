@@ -327,6 +327,37 @@ export async function testNotification(config: NotificationConfig): Promise<bool
   }
 }
 
+// ==================== 推送扫描失败通知 (如 Token 不足) ====================
+export async function notifyScanFailure(reason: string, detail: string): Promise<string[]> {
+  const configs = await db.notificationConfigs.filter(c => c.enabled).toArray();
+  if (configs.length === 0) return [];
+
+  const now = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+  const message = [
+    `🚨 <b>[Sentinel-X 扫描失败]</b>`,
+    ``,
+    `⚠️ <b>原因:</b> ${reason}`,
+    detail ? `📋 <b>详情:</b> ${detail}` : '',
+    `🕐 <b>时间:</b> ${now}`,
+  ].filter(Boolean).join('\n');
+
+  const successChannels: string[] = [];
+  for (const config of configs) {
+    try {
+      let success = false;
+      if (config.channel === 'telegram') {
+        success = await sendTelegram(config, message);
+      } else if (config.channel === 'whatsapp') {
+        success = await sendWhatsApp(config, message.replace(/<\/?[^>]+>/g, ''));
+      }
+      if (success) successChannels.push(config.channel);
+    } catch (err) {
+      console.warn(`推送扫描失败通知到 ${config.channel} 失败:`, err);
+    }
+  }
+  return successChannels;
+}
+
 // ==================== 诊断测试 (返回每一步详情) ====================
 export async function diagnosticTest(config: NotificationConfig): Promise<string> {
   const steps: string[] = [];

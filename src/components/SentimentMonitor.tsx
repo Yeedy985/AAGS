@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { db } from '../db';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { encrypt } from '../services/crypto';
+import { encrypt, decrypt } from '../services/crypto';
 import {
   LLM_PROVIDERS, analyzeSignals, saveSignalEvents,
 } from '../services/llmService';
@@ -19,7 +19,7 @@ import {
   checkServiceStatus, requestScan, fetchLatestBriefings,
   connectSSE, saveBriefing, notifyBriefing,
 } from '../services/publicScanService';
-import { notifyScanResult, notifyAlert } from '../services/notificationService';
+import { notifyScanResult, notifyAlert, notifyScanFailure } from '../services/notificationService';
 import type {
   SignalGroup, SignalDefinition, ScoringResult,
   GridAutoParams, LLMProvider, LLMRole, EventAlert,
@@ -313,14 +313,221 @@ function saveReportModeSettings(s: ReportModeSettings) {
   localStorage.setItem(REPORT_MODE_KEY, JSON.stringify(s));
 }
 
+// ==================== 独立扫描函数 (不依赖 React 组件, 可在任何页面后台执行) ====================
+let _bgScanning = false;
+let _bgAborted = false;
+async function backgroundScan() {
+  console.log('[AutoScan] backgroundScan() 被调用', new Date().toLocaleTimeString());
+  if (_bgScanning) { console.log('[AutoScan] 已有扫描在进行中，跳过'); return; }
+  _bgScanning = true;
+  _bgAborted = false;
+  try {
+    // 优先公共服务模式
+    const config = (await db.publicServiceConfigs.filter(c => c.enabled).toArray())[0];
+    if (config) {
+      console.log('[AutoScan] 公共服务模式:', config.serverUrl);
+      const { briefingId, estimatedSeconds } = await requestScan(config);
+      console.log('[AutoScan] 请求已发送, briefingId:', briefingId, '预计:', estimatedSeconds, 's');
+      const maxWait = Math.max(60, (estimatedSeconds || 30) * 2) * 1000;
+      const start = Date.now();
+      let briefing: ScanBriefing | null = null;
+      while (Date.now() - start < maxWait) {
+        if (_bgAborted) { console.log('[AutoScan] 扫描被用户中止'); _bgScanning = false; return; }
+        await new Promise(r => setTimeout(r, 3000));
+        if (_bgAborted) { console.log('[AutoScan] 扫描被用户中止'); _bgScanning = false; return; }
+        const briefings = await fetchLatestBriefings(config, 1);
+        if (briefings.length > 0 && briefings[0].briefingId === briefingId) {
+          briefing = briefings[0];
+          break;
+        }
+      }
+      if (!briefing) { console.warn('[AutoScan] 扫描超时'); return; }
+      const scanTimestamp = briefing.completedAt ? new Date(briefing.completedAt).getTime() : briefing.timestamp;
+      await saveBriefing(briefing, scanTimestamp);
+      if (config.notifyEnabled && briefing.alerts.length > 0) {
+        await notifyBriefing(briefing);
+      }
+      const allEvents = await db.signalEvents.toArray();
+      const result = SentinelScoringEngine.calculateScores(allEvents);
+      result.timestamp = scanTimestamp;
+      result.scanMode = 'public-service';
+      if (briefing.serverTokenUsage) result.serverTokenUsage = briefing.serverTokenUsage;
+      if (briefing.startedAt) result.serverStartedAt = briefing.startedAt;
+      if (briefing.completedAt) result.serverCompletedAt = briefing.completedAt;
+      await db.scoringResults.add(result);
+      notifyScanResult(briefing, result).catch((err: any) => console.warn('[AutoScan] 推送失败:', err));
+      console.log(`[AutoScan] 公共服务扫描完成 briefingId=${briefingId}`);
+      return;
+    }
+
+    // Fallback: 自建模式 (本地 LLM)
+    let analyzer = (await db.llmConfigs.filter(c => c.enabled && c.role === 'analyzer').toArray())[0];
+    if (!analyzer) {
+      const anyConfig = (await db.llmConfigs.filter(c => c.enabled).toArray())[0];
+      if (!anyConfig) { console.warn('[AutoScan] 无可用 LLM 配置或公共服务配置'); return; }
+      if (anyConfig.id && !anyConfig.role) {
+        await db.llmConfigs.update(anyConfig.id, { role: 'analyzer' });
+        anyConfig.role = 'analyzer';
+      }
+      analyzer = anyConfig;
+    }
+    const signalDefs = await db.signalDefinitions.filter(s => s.enabled).toArray();
+    if (signalDefs.length === 0) { console.warn('[AutoScan] 无启用的信号定义'); return; }
+
+    console.log('[AutoScan] 自建模式, analyzer:', analyzer.provider, analyzer.model);
+    const { events, alerts, marketSummary: summary, pipelineInfo, tokenUsage } = await analyzeSignals(
+      analyzer, signalDefs, () => {},
+    );
+    await saveSignalEvents(events, alerts);
+
+    const allEvents = await db.signalEvents.toArray();
+    const result = SentinelScoringEngine.calculateScores(allEvents);
+    result.tokenUsage = tokenUsage;
+    result.scanMode = 'self-hosted';
+    await db.scoringResults.add(result);
+
+    // 保存 ScanBriefing
+    const briefing: ScanBriefing = {
+      briefingId: `auto-self-${Date.now()}`,
+      mode: 'self-hosted',
+      timestamp: result.timestamp,
+      receivedAt: Date.now(),
+      marketSummary: summary,
+      triggeredSignals: events.map(e => ({
+        signalId: e.signalId, impact: e.impact, confidence: e.confidence,
+        title: e.title, summary: e.summary || '', source: e.source,
+      })),
+      alerts: alerts.map(a => ({
+        title: a.title, description: a.description, level: a.level,
+        group: a.group, relatedCoins: a.relatedCoins, source: a.source,
+      })),
+      pipelineInfo,
+      notified: false,
+    };
+    await db.scanBriefings.add(briefing);
+
+    notifyScanResult(briefing, result).catch((err: any) => console.warn('[AutoScan] 推送失败:', err));
+    for (const a of alerts) {
+      notifyAlert(a).catch((err: any) => console.warn('[AutoScan] 预警推送失败:', err));
+    }
+    console.log(`[AutoScan] 自建模式扫描完成, 信号:${events.length}, 预警:${alerts.length}`);
+  } catch (err: any) {
+    console.error('[AutoScan] 扫描失败:', err.message);
+    const errMsg = err.message || '';
+    const mode = (await db.publicServiceConfigs.filter(c => c.enabled).count()) > 0 ? 'public-service' : 'self-hosted';
+    // 精确分类错误类型
+    const isTokenInsufficient = errMsg.includes('402') || errMsg.includes('余额不足') || errMsg.includes('insufficient');
+    const isRateLimit = errMsg.includes('429') || errMsg.includes('最多请求');
+    const reason = isTokenInsufficient ? 'Token 余额不足' : isRateLimit ? '请求频率超限' : '扫描异常';
+    const detail = isTokenInsufficient
+      ? 'Token 不足，调用公共服务扫描失败，请前往 Sentinel-X 主页充值 Token'
+      : isRateLimit
+      ? '公共服务请求频率受限，已触发后台每小时扫描次数上限，请联系管理员调高限制或降低自动扫描频率'
+      : errMsg;
+    // 保存失败记录到 DB
+    await db.scanFailures.add({ timestamp: Date.now(), reason, errorDetail: detail, mode });
+    // 发送社交通知
+    notifyScanFailure(reason, detail)
+      .catch(e => console.warn('[AutoScan] 失败通知推送失败:', e));
+  } finally {
+    _bgScanning = false;
+  }
+}
+
+// ==================== 全局自动扫描单例 (sessionStorage 持久化, 跨页面/刷新恢复) ====================
+const AAGS_AUTO_SCAN_KEY = 'aags-auto-scan-state';
+
+function _loadAagsScanState(): { running: boolean; intervalMins: number; startedAt: number } | null {
+  try {
+    const raw = sessionStorage.getItem(AAGS_AUTO_SCAN_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+}
+function _saveAagsScanState(state: { running: boolean; intervalMins: number; startedAt: number } | null) {
+  try {
+    if (state) sessionStorage.setItem(AAGS_AUTO_SCAN_KEY, JSON.stringify(state));
+    else sessionStorage.removeItem(AAGS_AUTO_SCAN_KEY);
+  } catch {}
+}
+
+const _globalAutoScan = {
+  running: false,
+  intervalId: null as ReturnType<typeof setInterval> | null,
+  countdownId: null as ReturnType<typeof setInterval> | null,
+  countdown: 0,
+  totalSec: 0,
+  intervalMins: 0,
+  startedAt: 0,
+  lastScanTime: null as number | null,
+  listeners: new Set<() => void>(),
+  notify() { this.listeners.forEach(fn => fn()); },
+  stop() {
+    _bgAborted = true;
+    _bgScanning = false;
+    if (this.intervalId) { clearInterval(this.intervalId); this.intervalId = null; }
+    if (this.countdownId) { clearInterval(this.countdownId); this.countdownId = null; }
+    this.running = false;
+    this.countdown = 0;
+    _saveAagsScanState(null);
+    this.notify();
+    console.log('[AutoScan] 自动扫描已停止');
+  },
+  _startTimers(mins: number, triggerNow: boolean) {
+    if (this.intervalId) clearInterval(this.intervalId);
+    if (this.countdownId) clearInterval(this.countdownId);
+    this.running = true;
+    this.intervalMins = mins;
+    this.totalSec = mins * 60;
+    if (this.startedAt > 0) {
+      const elapsed = Math.floor((Date.now() - this.startedAt) / 1000);
+      const cycleElapsed = elapsed % this.totalSec;
+      this.countdown = this.totalSec - cycleElapsed;
+    } else {
+      this.countdown = this.totalSec;
+    }
+    if (triggerNow) {
+      this.lastScanTime = Date.now();
+      backgroundScan();
+    }
+    this.countdownId = setInterval(() => {
+      this.countdown = this.countdown <= 1 ? this.totalSec : this.countdown - 1;
+      this.notify();
+    }, 1000);
+    this.intervalId = setInterval(() => {
+      console.log('[AutoScan] 定时器触发! 调用 backgroundScan()', new Date().toLocaleTimeString());
+      this.lastScanTime = Date.now();
+      _saveAagsScanState({ running: true, intervalMins: mins, startedAt: this.startedAt });
+      backgroundScan();
+      this.notify();
+    }, mins * 60 * 1000);
+    this.notify();
+  },
+  start(mins: number) {
+    this.stop();
+    this.startedAt = Date.now();
+    this.lastScanTime = Date.now();
+    _saveAagsScanState({ running: true, intervalMins: mins, startedAt: this.startedAt });
+    this._startTimers(mins, true);
+  },
+};
+
+// 模块加载时自动从 sessionStorage 恢复定时器 (SPA 内刷新页面时)
+(function _autoRestore() {
+  const saved = _loadAagsScanState();
+  if (saved?.running && saved.intervalMins > 0) {
+    _globalAutoScan.startedAt = saved.startedAt;
+    _globalAutoScan.lastScanTime = saved.startedAt;
+    _globalAutoScan._startTimers(saved.intervalMins, false);
+  }
+})();
+
 // ==================== 子组件: 自动扫描面板 (全局, 始终可见) ====================
-function AutoScanPanel({ onScan, analyzing }: { onScan: () => void; analyzing: boolean }) {
+function AutoScanPanel({ analyzing }: { analyzing: boolean }) {
   const [settings, setSettings] = useState<ReportModeSettings>(getReportModeSettings);
-  const [autoRunning, setAutoRunning] = useState(false);
-  const [countdown, setCountdown] = useState(0); // 剩余秒数
-  const [lastScanTime, setLastScanTime] = useState<number | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [autoRunning, setAutoRunning] = useState(_globalAutoScan.running);
+  const [countdown, setCountdown] = useState(_globalAutoScan.countdown);
+  const [lastScanTime, setLastScanTime] = useState<number | null>(_globalAutoScan.lastScanTime);
 
   const update = (patch: Partial<ReportModeSettings>) => {
     const next = { ...settings, ...patch };
@@ -328,48 +535,24 @@ function AutoScanPanel({ onScan, analyzing }: { onScan: () => void; analyzing: b
     saveReportModeSettings(next);
   };
 
-  // 清理定时器
-  const stopAutoScan = useCallback(() => {
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
-    setAutoRunning(false);
-    setCountdown(0);
+  // 同步全局状态到组件
+  useEffect(() => {
+    const sync = () => {
+      setAutoRunning(_globalAutoScan.running);
+      setCountdown(_globalAutoScan.countdown);
+      setLastScanTime(_globalAutoScan.lastScanTime);
+    };
+    _globalAutoScan.listeners.add(sync);
+    sync();
+    return () => { _globalAutoScan.listeners.delete(sync); };
   }, []);
 
-  // 启动自动扫描
+  const stopAutoScan = useCallback(() => { _globalAutoScan.stop(); }, []);
   const startAutoScan = useCallback(() => {
     const mins = settings.autoScanInterval;
     if (mins < 1) return;
-    stopAutoScan();
-    setAutoRunning(true);
-    setLastScanTime(Date.now());
-
-    // 立即执行一次
-    onScan();
-
-    // 设置倒计时
-    const totalSec = mins * 60;
-    setCountdown(totalSec);
-
-    // 每秒更新倒计时
-    countdownRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) return totalSec; // 重置
-        return prev - 1;
-      });
-    }, 1000);
-
-    // 定时触发扫描
-    intervalRef.current = setInterval(() => {
-      setLastScanTime(Date.now());
-      onScan();
-    }, mins * 60 * 1000);
-  }, [settings.autoScanInterval, onScan, stopAutoScan]);
-
-  // 组件卸载时清理
-  useEffect(() => {
-    return () => { stopAutoScan(); };
-  }, [stopAutoScan]);
+    _globalAutoScan.start(mins);
+  }, [settings.autoScanInterval]);
 
   const formatCountdown = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -477,6 +660,12 @@ function PublicServiceConfigPanel() {
   const [authToken, setAuthToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // ── 编辑配置 ──
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editUrl, setEditUrl] = useState('');
+  const [editToken, setEditToken] = useState('');
+  const [showEditToken, setShowEditToken] = useState(false);
 
   // ── 偏好设置 ──
   const [showPrefs, setShowPrefs] = useState(false);
@@ -617,6 +806,26 @@ function PublicServiceConfigPanel() {
 
   const reportModeLabel = (m: ReportMode) => REPORT_MODE_OPTIONS.find(o => o.value === m)?.label || m;
 
+  const handleStartEdit = (c: any) => {
+    setEditingId(c.id);
+    setEditUrl(c.serverUrl);
+    setEditToken(decrypt(c.authToken));
+    setShowEditToken(false);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId || !editUrl.trim() || !editToken.trim()) return;
+    setSaving(true);
+    await db.publicServiceConfigs.update(editingId, {
+      serverUrl: editUrl.replace(/\/+$/, ''),
+      authToken: encrypt(editToken),
+    });
+    setEditingId(null);
+    setEditUrl('');
+    setEditToken('');
+    setSaving(false);
+  };
+
   return (
     <div className="card space-y-4">
       <div className="flex items-center justify-between">
@@ -708,6 +917,9 @@ function PublicServiceConfigPanel() {
                       <button className="text-sm px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-white" onClick={handleCheck} disabled={checking}>
                         {checking ? <Loader2 className="w-3 h-3 animate-spin" /> : '检测'}
                       </button>
+                      <button className="text-sm px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-white" onClick={() => editingId === c.id ? setEditingId(null) : handleStartEdit(c)}>
+                        编辑
+                      </button>
                       <button className="text-sm px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-white" onClick={() => setShowPrefs(!showPrefs)}>
                         偏好
                       </button>
@@ -730,6 +942,33 @@ function PublicServiceConfigPanel() {
                   <span>通知: {c.notifyEnabled ? `${c.notifyLevels.length}级` : '关闭'}</span>
                   <span>搜索增强: {c.enableSearch ? '开' : '关'}</span>
                   {c.lastConnectedAt && <span>上次: {new Date(c.lastConnectedAt).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
+                </div>
+              )}
+
+              {/* ── 编辑面板 ── */}
+              {editingId === c.id && (
+                <div className="px-3 pb-3 space-y-3">
+                  <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 space-y-3">
+                    <div>
+                      <label className="text-sm text-slate-400 block mb-1">服务器地址</label>
+                      <input className="input-field" value={editUrl} onChange={(e) => setEditUrl(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="text-sm text-slate-400 block mb-1">API 认证令牌</label>
+                      <div className="relative">
+                        <input className="input-field pr-10" type={showEditToken ? 'text' : 'password'} value={editToken} onChange={(e) => setEditToken(e.target.value)} />
+                        <button className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-300" onClick={() => setShowEditToken(!showEditToken)}>
+                          {showEditToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button className="btn-primary text-sm" onClick={handleSaveEdit} disabled={saving || !editUrl.trim() || !editToken.trim()}>
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : '保存'}
+                      </button>
+                      <button className="btn-secondary text-sm" onClick={() => setEditingId(null)}>取消</button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1260,6 +1499,10 @@ function SignalEventHistory() {
     () => db.scanBriefings.orderBy('receivedAt').reverse().limit(20).toArray(),
     [],
   );
+  const scanFailures = useLiveQuery(
+    () => db.scanFailures.orderBy('timestamp').reverse().limit(20).toArray(),
+    [],
+  );
   const [expandedScan, setExpandedScan] = useState<number | null>(null);
 
   // 以 scoringResults 为主数据源构建扫描记录（每次扫描必有一条），辅以 signalEvents 展示详情
@@ -1285,7 +1528,7 @@ function SignalEventHistory() {
           const topGroups = Array.from(groupCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3);
           const isPublic = evts.some(e => e.source.includes('公共服务'));
           const matchedBriefing = briefings?.find(b => Math.abs(b.timestamp - timestamp) < 5000);
-          return { timestamp, events: evts, netImpact, bullish, bearish, topGroups, isPublic, tokenUsage: undefined as any, scanMode: undefined as any, scoreDirection: undefined as number | undefined, scoreVolatility: undefined as number | undefined, scoreRisk: undefined as number | undefined, activeSignals: undefined as number | undefined, marketSummary: matchedBriefing?.marketSummary || '' };
+          return { timestamp, events: evts, netImpact, bullish, bearish, topGroups, isPublic, tokenUsage: undefined as any, scanMode: undefined as any, scoreDirection: undefined as number | undefined, scoreVolatility: undefined as number | undefined, scoreRisk: undefined as number | undefined, activeSignals: undefined as number | undefined, marketSummary: matchedBriefing?.marketSummary || '', serverTokenUsage: matchedBriefing?.serverTokenUsage, startedAt: matchedBriefing?.startedAt, completedAt: matchedBriefing?.completedAt };
         });
     }
 
@@ -1334,6 +1577,9 @@ function SignalEventHistory() {
           scoreRisk: sr.scoreRisk,
           activeSignals: sr.activeSignals,
           marketSummary: matchedBriefing?.marketSummary || '',
+          serverTokenUsage: sr.serverTokenUsage || matchedBriefing?.serverTokenUsage,
+          startedAt: sr.serverStartedAt || matchedBriefing?.startedAt,
+          completedAt: sr.serverCompletedAt || matchedBriefing?.completedAt,
         };
       });
   }, [events, scoringResults, briefings]);
@@ -1355,138 +1601,217 @@ function SignalEventHistory() {
 
   const groupLabel = (g: string) => SIGNAL_GROUPS.find(gr => gr.id === g);
 
+  const hasFailures = scanFailures && scanFailures.length > 0;
+
   return (
     <div className="card space-y-4">
-      <h3 className="text-lg font-semibold flex items-center gap-2">
-        <Zap className="w-5 h-5 text-amber-400" />
-        扫描记录
-        <span className="text-sm text-slate-500 font-normal ml-1">(最近 {scanRecords.length} 次)</span>
-      </h3>
-      <div className="space-y-2">
-        {scanRecords.map((scan) => {
-          const isExpanded = expandedScan === scan.timestamp;
-          const time = new Date(scan.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-          return (
-            <div key={scan.timestamp} className={`rounded-xl border overflow-hidden ${
-              Math.abs(scan.netImpact) > 50 ? 'border-amber-500/20' : 'border-slate-800'
-            }`}>
-              {/* 扫描摘要行 */}
-              <button
-                className="w-full flex items-center justify-between p-3 hover:bg-slate-800/30 transition-colors text-left"
-                onClick={() => setExpandedScan(isExpanded ? null : scan.timestamp)}
-              >
-                <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                  {scan.netImpact > 0
-                    ? <ArrowUpRight className="w-4 h-4 text-emerald-400 shrink-0" />
-                    : scan.netImpact < 0
-                    ? <ArrowDownRight className="w-4 h-4 text-red-400 shrink-0" />
-                    : <Activity className="w-4 h-4 text-slate-400 shrink-0" />
-                  }
-                  <span className="text-sm text-slate-600 shrink-0">{time}</span>
-                  {scan.isPublic && <span className="text-sm px-1 py-0.5 rounded bg-cyan-600/10 text-cyan-500 shrink-0">公共</span>}
-                  <span className="text-sm text-slate-300 shrink-0">{(scan.events || []).length} 个信号</span>
-                  {scan.tokenUsage && scan.tokenUsage.length > 0 && (
-                    <span className="text-sm px-1.5 py-0.5 rounded bg-purple-600/10 text-purple-400 shrink-0 tabular-nums">
-                      🔤 {scan.tokenUsage.reduce((s: number, u: any) => s + u.totalTokens, 0).toLocaleString()} tok
-                    </span>
-                  )}
-                  <div className="flex items-center gap-1 min-w-0">
-                    {scan.topGroups.map(([gid, cnt]) => {
-                      const grp = groupLabel(gid);
-                      return (
-                        <span key={gid} className="text-sm px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-500 shrink-0">
-                          {grp?.icon} {grp?.label?.slice(0, 4)}{cnt > 1 ? ` ×${cnt}` : ''}
+      {/* 两列并排布局 */}
+      <div className={`grid gap-4 ${hasFailures ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+        {/* 左列: 扫描记录 */}
+        <div className="space-y-3 min-w-0">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <Zap className="w-5 h-5 text-amber-400" />
+            扫描记录
+            <span className="text-sm text-slate-500 font-normal ml-1">(最近 {scanRecords.length} 次)</span>
+          </h3>
+          <div className="space-y-2">
+            {scanRecords.map((scan) => {
+              const isExpanded = expandedScan === scan.timestamp;
+              const time = new Date(scan.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+              return (
+                <div key={scan.timestamp} className={`rounded-xl border overflow-hidden ${
+                  Math.abs(scan.netImpact) > 50 ? 'border-amber-500/20' : 'border-slate-800'
+                }`}>
+                  {/* 扫描摘要行 */}
+                  <button
+                    className="w-full flex items-center justify-between p-3 hover:bg-slate-800/30 transition-colors text-left"
+                    onClick={() => setExpandedScan(isExpanded ? null : scan.timestamp)}
+                  >
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                      {scan.netImpact > 0
+                        ? <ArrowUpRight className="w-4 h-4 text-emerald-400 shrink-0" />
+                        : scan.netImpact < 0
+                        ? <ArrowDownRight className="w-4 h-4 text-red-400 shrink-0" />
+                        : <Activity className="w-4 h-4 text-slate-400 shrink-0" />
+                      }
+                      <span className="text-sm text-slate-600 shrink-0">{time}</span>
+                      {scan.isPublic && <span className="text-sm px-1 py-0.5 rounded bg-cyan-600/10 text-cyan-500 shrink-0">公共</span>}
+                      <span className="text-sm text-slate-300 shrink-0">{(scan.events || []).length} 个信号</span>
+                      {scan.serverTokenUsage && scan.serverTokenUsage.totalTokens > 0 ? (
+                        <span className="text-sm px-1.5 py-0.5 rounded bg-purple-600/10 text-purple-400 shrink-0 tabular-nums">
+                          🔤 {scan.serverTokenUsage.totalTokens.toLocaleString()} tok
                         </span>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0 ml-2">
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <span className="text-emerald-500">{scan.bullish}📈</span>
-                    <span className="text-red-400">{scan.bearish}📉</span>
-                  </div>
-                  <span className={`text-sm font-bold tabular-nums ${
-                    scan.netImpact > 0 ? 'text-emerald-400' : scan.netImpact < 0 ? 'text-red-400' : 'text-slate-500'
-                  }`}>
-                    {scan.netImpact > 0 ? '+' : ''}{scan.netImpact}
-                  </span>
-                  {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-500" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-500" />}
-                </div>
-              </button>
+                      ) : scan.tokenUsage && scan.tokenUsage.length > 0 ? (
+                        <span className="text-sm px-1.5 py-0.5 rounded bg-purple-600/10 text-purple-400 shrink-0 tabular-nums">
+                          🔤 {scan.tokenUsage.reduce((s: number, u: any) => s + u.totalTokens, 0).toLocaleString()} tok
+                        </span>
+                      ) : null}
+                      <div className="flex items-center gap-1 min-w-0">
+                        {scan.topGroups.map(([gid, cnt]) => {
+                          const grp = groupLabel(gid);
+                          return (
+                            <span key={gid} className="text-sm px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-500 shrink-0">
+                              {grp?.icon} {grp?.label?.slice(0, 4)}{cnt > 1 ? ` ×${cnt}` : ''}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0 ml-2">
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <span className="text-emerald-500">{scan.bullish}📈</span>
+                        <span className="text-red-400">{scan.bearish}📉</span>
+                      </div>
+                      <span className={`text-sm font-bold tabular-nums ${
+                        scan.netImpact > 0 ? 'text-emerald-400' : scan.netImpact < 0 ? 'text-red-400' : 'text-slate-500'
+                      }`}>
+                        {scan.netImpact > 0 ? '+' : ''}{scan.netImpact}
+                      </span>
+                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-500" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-500" />}
+                    </div>
+                  </button>
 
-              {/* 展开: 显示该次扫描的所有信号事件 */}
-              {isExpanded && (
-                <div className="border-t border-slate-800/50">
-                  {scan.marketSummary && (
-                    <div className="px-4 py-3 bg-blue-500/5 border-b border-slate-800/30">
-                      <p className="text-xs text-slate-500 font-medium mb-1 flex items-center gap-1">📊 市场综合分析</p>
-                      <p className="text-sm text-slate-300 leading-relaxed">{scan.marketSummary}</p>
-                    </div>
-                  )}
-                  {scan.events.length === 0 && (
-                    <div className="px-4 py-4 text-center text-slate-500">
-                      <p className="text-sm">🌊 本次扫描未触发任何信号 — 市场平静</p>
-                      {scan.scoreDirection !== undefined && (
-                        <p className="text-sm mt-1 text-slate-600">
-                          SD={scan.scoreDirection?.toFixed(1)} SV={scan.scoreVolatility?.toFixed(1)} SR={scan.scoreRisk?.toFixed(1)}
-                        </p>
+                  {/* 展开: 显示该次扫描的所有信号事件 */}
+                  {isExpanded && (
+                    <div className="border-t border-slate-800/50">
+                      {scan.marketSummary && (
+                        <div className="px-4 py-3 bg-blue-500/5 border-b border-slate-800/30">
+                          <p className="text-xs text-slate-500 font-medium mb-1 flex items-center gap-1">📊 市场综合分析</p>
+                          <p className="text-sm text-slate-300 leading-relaxed">{scan.marketSummary}</p>
+                        </div>
                       )}
-                    </div>
-                  )}
-                  {scan.events.map((evt) => {
-                    const grp = groupLabel(evt.group);
-                    return (
-                      <div key={evt.id} className="px-4 py-2.5 border-b border-slate-800/30 last:border-b-0 hover:bg-slate-800/20">
-                        <div className="flex items-center gap-2">
-                          {evt.impact > 0 ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> : <TrendingDown className="w-3.5 h-3.5 text-red-400 shrink-0" />}
-                          <span className="text-sm px-1.5 py-0.5 rounded bg-slate-800 text-slate-500 shrink-0">{grp?.icon} {grp?.label}</span>
-                          <span className="text-sm text-slate-600 shrink-0">#{evt.signalId}</span>
-                          <span className="font-medium text-sm text-slate-200 truncate flex-1">{evt.title}</span>
-                          <span className={`text-sm font-bold tabular-nums shrink-0 ${evt.impact > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {evt.impact > 0 ? '+' : ''}{evt.impact}
-                          </span>
-                          <span className="text-sm text-slate-600 shrink-0">{(evt.confidence * 100).toFixed(0)}%</span>
+                      {scan.events.length === 0 && (
+                        <div className="px-4 py-4 text-center text-slate-500">
+                          <p className="text-sm">🌊 本次扫描未触发任何信号 — 市场平静</p>
+                          {scan.scoreDirection !== undefined && (
+                            <p className="text-sm mt-1 text-slate-600">
+                              SD={scan.scoreDirection?.toFixed(1)} SV={scan.scoreVolatility?.toFixed(1)} SR={scan.scoreRisk?.toFixed(1)}
+                            </p>
+                          )}
                         </div>
-                        {evt.summary && (
-                          <p className="text-sm text-slate-500 mt-1 ml-5 leading-relaxed">{evt.summary}</p>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {/* Token 消耗详情 */}
-                  {scan.tokenUsage && scan.tokenUsage.length > 0 && (
-                    <div className="px-4 py-3 bg-slate-800/20 border-t border-slate-700/30">
-                      <p className="text-sm text-slate-500 font-medium mb-2 flex items-center gap-1">🔤 Token 消耗明细</p>
-                      <div className="space-y-1.5">
-                        {scan.tokenUsage.map((u: any, i: number) => (
-                          <div key={i} className="flex items-center gap-3 text-sm">
-                            <span className="text-slate-400 font-medium w-24">{u.provider === 'perplexity' ? '🔍 搜索' : '🧠 分析'}</span>
-                            <span className="text-slate-500">{u.provider}/{u.model}</span>
-                            <span className="text-slate-600 ml-auto tabular-nums">输入: <span className="text-blue-400">{u.promptTokens.toLocaleString()}</span></span>
-                            <span className="text-slate-600 tabular-nums">输出: <span className="text-purple-400">{u.completionTokens.toLocaleString()}</span></span>
-                            <span className="text-slate-400 font-bold tabular-nums">合计: {u.totalTokens.toLocaleString()}</span>
+                      )}
+                      {scan.events.map((evt) => {
+                        const grp = groupLabel(evt.group);
+                        return (
+                          <div key={evt.id} className="px-4 py-2.5 border-b border-slate-800/30 last:border-b-0 hover:bg-slate-800/20">
+                            <div className="flex items-center gap-2">
+                              {evt.impact > 0 ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> : <TrendingDown className="w-3.5 h-3.5 text-red-400 shrink-0" />}
+                              <span className="text-sm px-1.5 py-0.5 rounded bg-slate-800 text-slate-500 shrink-0">{grp?.icon} {grp?.label}</span>
+                              <span className="text-sm text-slate-600 shrink-0">#{evt.signalId}</span>
+                              <span className="font-medium text-sm text-slate-200 truncate flex-1">{evt.title}</span>
+                              <span className={`text-sm font-bold tabular-nums shrink-0 ${evt.impact > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {evt.impact > 0 ? '+' : ''}{evt.impact}
+                              </span>
+                              <span className="text-sm text-slate-600 shrink-0">{(evt.confidence * 100).toFixed(0)}%</span>
+                            </div>
+                            {evt.summary && (
+                              <p className="text-sm text-slate-500 mt-1 ml-5 leading-relaxed">{evt.summary}</p>
+                            )}
                           </div>
-                        ))}
-                        <div className="flex items-center justify-between pt-1.5 border-t border-slate-700/30 text-sm">
-                          <span className="text-slate-500">总消耗</span>
-                          <span className="text-amber-400 font-bold tabular-nums">
-                            {scan.tokenUsage.reduce((s: number, u: any) => s + u.totalTokens, 0).toLocaleString()} tokens
-                          </span>
+                        );
+                      })}
+                      {/* Token 消耗 & 耗时详情 */}
+                      {scan.isPublic && scan.serverTokenUsage && scan.serverTokenUsage.totalTokens > 0 ? (
+                        <div className="px-4 py-3 bg-slate-800/20 border-t border-slate-700/30">
+                          <p className="text-sm text-slate-500 font-medium mb-2 flex items-center gap-1">🔤 服务端 Token 消耗</p>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                            <div>
+                              <span className="text-slate-500">搜索 Token:</span>
+                              <span className="ml-2 font-medium text-blue-400 tabular-nums">{scan.serverTokenUsage.searchTokens.toLocaleString()}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500">分析 Token:</span>
+                              <span className="ml-2 font-medium text-purple-400 tabular-nums">{scan.serverTokenUsage.analyzeTokens.toLocaleString()}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500">总 Token:</span>
+                              <span className="ml-2 font-semibold text-amber-400 tabular-nums">{scan.serverTokenUsage.totalTokens.toLocaleString()}</span>
+                            </div>
+                            {scan.startedAt && scan.completedAt && (
+                              <div>
+                                <span className="text-slate-500">耗时:</span>
+                                <span className="ml-2 font-medium text-cyan-400 tabular-nums">
+                                  {((new Date(scan.completedAt).getTime() - new Date(scan.startedAt).getTime()) / 1000).toFixed(1)}s
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          {scan.startedAt && (
+                            <div className="flex items-center gap-4 mt-2 text-xs text-slate-600">
+                              <span>开始: {new Date(scan.startedAt).toLocaleString('zh-CN')}</span>
+                              {scan.completedAt && <span>完成: {new Date(scan.completedAt).toLocaleString('zh-CN')}</span>}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    </div>
-                  )}
-                  {scan.tokenUsage === undefined && !scan.isPublic && (
-                    <div className="px-4 py-2 bg-slate-800/20 border-t border-slate-700/30">
-                      <p className="text-sm text-slate-600">💡 此次扫描未记录 Token 消耗（旧版扫描记录）</p>
+                      ) : scan.tokenUsage && scan.tokenUsage.length > 0 ? (
+                        <div className="px-4 py-3 bg-slate-800/20 border-t border-slate-700/30">
+                          <p className="text-sm text-slate-500 font-medium mb-2 flex items-center gap-1">🔤 Token 消耗明细</p>
+                          <div className="space-y-1.5">
+                            {scan.tokenUsage.map((u: any, i: number) => (
+                              <div key={i} className="flex items-center gap-3 text-sm">
+                                <span className="text-slate-400 font-medium w-24">{u.provider === 'perplexity' ? '🔍 搜索' : '🧠 分析'}</span>
+                                <span className="text-slate-500">{u.provider}/{u.model}</span>
+                                <span className="text-slate-600 ml-auto tabular-nums">输入: <span className="text-blue-400">{u.promptTokens.toLocaleString()}</span></span>
+                                <span className="text-slate-600 tabular-nums">输出: <span className="text-purple-400">{u.completionTokens.toLocaleString()}</span></span>
+                                <span className="text-slate-400 font-bold tabular-nums">合计: {u.totalTokens.toLocaleString()}</span>
+                              </div>
+                            ))}
+                            <div className="flex items-center justify-between pt-1.5 border-t border-slate-700/30 text-sm">
+                              <span className="text-slate-500">总消耗</span>
+                              <span className="text-amber-400 font-bold tabular-nums">
+                                {scan.tokenUsage.reduce((s: number, u: any) => s + u.totalTokens, 0).toLocaleString()} tokens
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : !scan.isPublic ? (
+                        <div className="px-4 py-2 bg-slate-800/20 border-t border-slate-700/30">
+                          <p className="text-sm text-slate-600">💡 此次扫描未记录 Token 消耗（旧版扫描记录）</p>
+                        </div>
+                      ) : null}
                     </div>
                   )}
                 </div>
-              )}
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 右列: 失败记录 */}
+        {hasFailures && (
+          <div className="space-y-3 min-w-0">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+              失败记录
+              <span className="text-sm text-red-400/60 font-normal ml-1">({scanFailures!.length} 条)</span>
+            </h3>
+            <div className="space-y-2">
+              {scanFailures!.map((f) => {
+                const time = new Date(f.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const isToken = f.reason.includes('Token');
+                const isRateLimit = f.reason.includes('频率');
+                return (
+                  <div key={f.id} className={`rounded-xl border p-3 ${isRateLimit ? 'border-amber-500/20 bg-amber-500/5' : 'border-red-500/20 bg-red-500/5'}`}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <AlertTriangle className={`w-4 h-4 shrink-0 ${isRateLimit ? 'text-amber-400' : 'text-red-400'}`} />
+                      <span className="text-sm text-slate-500 shrink-0">{time}</span>
+                      <span className={`text-sm font-medium ${isRateLimit ? 'text-amber-400' : 'text-red-400'}`}>{f.reason}</span>
+                      {f.mode === 'public-service' && <span className="text-xs px-1 py-0.5 rounded bg-cyan-600/10 text-cyan-500">公共服务</span>}
+                    </div>
+                    <p className="text-sm mt-1.5 ml-6">
+                      {isToken
+                        ? <span className="text-amber-400/80">💡 Token 余额不足，请前往 <a href="http://43.156.216.141:3005/dashboard" target="_blank" rel="noopener noreferrer" className="underline text-cyan-400 hover:text-cyan-300">Sentinel-X 主页</a> 充值</span>
+                        : isRateLimit
+                        ? <span className="text-amber-400/70">⏱️ 请求频率受限，请联系管理员调高限制或降低扫描频率</span>
+                        : f.errorDetail && <span className="text-slate-500">{f.errorDetail}</span>
+                      }
+                    </p>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1496,6 +1821,7 @@ function SignalEventHistory() {
 export default function SentimentMonitor() {
   const [scanMode, setScanMode] = useState<ScanMode>('self-hosted');
   const [analyzing, setAnalyzing] = useState(false);
+  const analyzingRef = useRef(false);
   const [error, setError] = useState('');
   const [scores, setScores] = useState<ScoringResult | null>(null);
   const [gridParams, setGridParams] = useState<GridAutoParams | null>(null);
@@ -1514,13 +1840,17 @@ export default function SentimentMonitor() {
     }
   }, [publicConfigs]);
 
-  // 每次加载时从DB重算评分
+  // 每次加载时从DB重算评分，但保留最近一次保存的扫描时间戳
   const signalEvents = useLiveQuery(() => db.signalEvents.toArray(), []);
   useEffect(() => {
     if (signalEvents && signalEvents.length > 0) {
       const result = SentinelScoringEngine.calculateScores(signalEvents);
-      setScores(result);
-      setGridParams(SentinelScoringEngine.mapToGridParams(result));
+      // 从 DB 恢复最近保存的评分时间戳，避免"扫描于"时间随实时刷新
+      db.scoringResults.orderBy('timestamp').reverse().first().then(latest => {
+        if (latest) result.timestamp = latest.timestamp;
+        setScores(result);
+        setGridParams(SentinelScoringEngine.mapToGridParams(result));
+      });
     }
   }, [signalEvents]);
 
@@ -1535,7 +1865,8 @@ export default function SentimentMonitor() {
 
   // ===== 自建模式: 本地 LLM 扫描 =====
   const handleSelfHostedScan = useCallback(async () => {
-    if (analyzing) return; // 防重复
+    if (analyzingRef.current) return; // 防重复
+    analyzingRef.current = true;
     setAnalyzing(true);
     setError('');
     setNewAlerts([]);
@@ -1551,6 +1882,7 @@ export default function SentimentMonitor() {
         const anyConfig = (await db.llmConfigs.filter(c => c.enabled).toArray())[0];
         if (!anyConfig) {
           setError('请先配置并启用至少一个「分析 Analyzer」LLM 模型');
+          analyzingRef.current = false;
           setAnalyzing(false);
           return;
         }
@@ -1564,6 +1896,7 @@ export default function SentimentMonitor() {
       const signalDefs = await db.signalDefinitions.filter(s => s.enabled).toArray();
       if (signalDefs.length === 0) {
         setError('请先启用信号');
+        analyzingRef.current = false;
         setAnalyzing(false);
         return;
       }
@@ -1630,13 +1963,15 @@ export default function SentimentMonitor() {
       setError(`分析失败: ${err.message}`);
       setScanResult({ success: false, signalCount: 0, alertCount: 0, elapsed: Math.round((Date.now() - scanStartRef.current) / 1000) });
     }
+    analyzingRef.current = false;
     setAnalyzing(false);
     setProgress(null);
-  }, [analyzing]);
+  }, []);
 
   // ===== 公共服务模式: 请求服务端扫描 =====
   const handlePublicScan = useCallback(async () => {
-    if (analyzing) return; // 防重复
+    if (analyzingRef.current) return; // 防重复
+    analyzingRef.current = true;
     setAnalyzing(true);
     setError('');
     setNewAlerts([]);
@@ -1647,6 +1982,7 @@ export default function SentimentMonitor() {
       const config = (await db.publicServiceConfigs.filter(c => c.enabled).toArray())[0];
       if (!config) {
         setError('请先配置并启用公共扫描服务');
+        analyzingRef.current = false;
         setAnalyzing(false);
         return;
       }
@@ -1672,13 +2008,14 @@ export default function SentimentMonitor() {
 
       if (!briefing) {
         setError('扫描超时，简报可能稍后通过 SSE 推送到达');
+        analyzingRef.current = false;
         setAnalyzing(false);
         setProgress(null);
         return;
       }
 
-      // 保存并处理简报 (用统一时间戳确保 signalEvents 和 scoringResult 匹配)
-      const scanTimestamp = Date.now();
+      // 保存并处理简报 (使用服务端真实完成时间作为时间戳)
+      const scanTimestamp = briefing.completedAt ? new Date(briefing.completedAt).getTime() : briefing.timestamp;
       const saved = await saveBriefing(briefing, scanTimestamp);
       setMarketSummary(briefing.marketSummary);
       setNewAlerts(saved.alerts);
@@ -1689,13 +2026,16 @@ export default function SentimentMonitor() {
         await notifyBriefing(briefing);
       }
 
-      // 重算评分 (使用相同时间戳)
+      // 重算评分 (使用服务端真实完成时间作为时间戳)
       const allEvents = await db.signalEvents.toArray();
       const result = SentinelScoringEngine.calculateScores(allEvents);
       result.timestamp = scanTimestamp;
+      result.scanMode = 'public-service';
+      if (briefing.serverTokenUsage) result.serverTokenUsage = briefing.serverTokenUsage;
+      if (briefing.startedAt) result.serverStartedAt = briefing.startedAt;
+      if (briefing.completedAt) result.serverCompletedAt = briefing.completedAt;
       setScores(result);
       setGridParams(SentinelScoringEngine.mapToGridParams(result));
-      result.scanMode = 'public-service';
       await db.scoringResults.add(result);
 
       // 推送扫描结果到用户配置的通知渠道
@@ -1703,6 +2043,7 @@ export default function SentimentMonitor() {
     } catch (err: any) {
       setError(`公共服务扫描失败: ${err.message}`);
     }
+    analyzingRef.current = false;
     setAnalyzing(false);
     setProgress(null);
   }, []);
@@ -1834,7 +2175,7 @@ export default function SentimentMonitor() {
       )}
 
       {/* 自动扫描 (全局, 始终可见) */}
-      <AutoScanPanel onScan={handleScan} analyzing={analyzing} />
+      <AutoScanPanel analyzing={analyzing} />
 
       {/* 管线配置 (双模式) */}
       <PipelineConfigPanel scanMode={scanMode} onModeChange={setScanMode} />

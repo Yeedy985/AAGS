@@ -305,6 +305,13 @@ export interface ScoringResult {
     model: string;
   }[];
   scanMode?: ScanMode;     // 'self-hosted' | 'public-service'
+  serverTokenUsage?: {     // 公共服务模式: 服务端真实 LLM Token 消耗
+    searchTokens: number;
+    analyzeTokens: number;
+    totalTokens: number;
+  };
+  serverStartedAt?: string;   // 服务端扫描开始时间 (ISO)
+  serverCompletedAt?: string; // 服务端扫描完成时间 (ISO)
 }
 
 // 网格自动调参输出
@@ -431,6 +438,15 @@ export interface ScanBriefing {
     analyzerProvider: string;
     dataTimestamp?: number;
   };
+  serverTokenUsage?: {        // 服务端真实 LLM Token 消耗
+    searchTokens: number;
+    analyzeTokens: number;
+    totalTokens: number;
+  };
+  startedAt?: string;         // 服务端扫描开始时间 (ISO)
+  completedAt?: string;       // 服务端扫描完成时间 (ISO)
+  enableSearch?: boolean;     // 是否启用搜索增强
+  tokenCost?: number;         // 用户 Token 扣费
   notified: boolean;          // 是否已推送到社交工具
 }
 

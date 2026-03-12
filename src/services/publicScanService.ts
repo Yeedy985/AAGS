@@ -195,6 +195,15 @@ function parseBriefing(raw: any): ScanBriefing {
       analyzerProvider: raw.pipelineInfo?.analyzerProvider || 'server',
       dataTimestamp: raw.pipelineInfo?.dataTimestamp,
     },
+    serverTokenUsage: raw.serverTokenUsage ? {
+      searchTokens: raw.serverTokenUsage.searchTokens || 0,
+      analyzeTokens: raw.serverTokenUsage.analyzeTokens || 0,
+      totalTokens: raw.serverTokenUsage.totalTokens || 0,
+    } : undefined,
+    startedAt: raw.startedAt || undefined,
+    completedAt: raw.completedAt || undefined,
+    enableSearch: raw.enableSearch,
+    tokenCost: raw.tokenCost,
     notified: false,
   };
 }
