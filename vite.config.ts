@@ -132,9 +132,9 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/dataapi\/alternative/, ''),
         secure: true,
       },
-      // 公共扫描服务 (用户自建服务器)
+      // 公共扫描服务
       '/scanapi': {
-        target: 'http://localhost:3001',
+        target: 'http://43.156.216.141:3005',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/scanapi/, ''),
         secure: false,

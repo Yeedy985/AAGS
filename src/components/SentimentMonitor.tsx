@@ -4,7 +4,7 @@ import {
   TrendingUp, TrendingDown, Eye, EyeOff, AlertTriangle,
   Settings2, RefreshCw, Shield, Zap, Activity,
   ArrowUpRight, ArrowDownRight, Gauge, Search, Brain,
-  Globe, Server, Wifi, Clock, Send, ExternalLink, X, Radio, CalendarClock, Hand,
+  Globe, Server, Wifi, Clock, Send, ExternalLink, X, Radio, CalendarClock, Hand, Pause, Timer,
 } from 'lucide-react';
 import { db } from '../db';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -279,7 +279,7 @@ function LLMConfigPanel() {
 }
 
 // ==================== 子组件: 公共服务配置面板 ====================
-const DEFAULT_SERVER_URL = 'https://sentinel.aags.app';
+const DEFAULT_SERVER_URL = 'http://43.156.216.141:3005';
 
 const REPORT_MODE_OPTIONS: { value: ReportMode; label: string; desc: string; icon: typeof Radio }[] = [
   { value: 'realtime', label: '实时推送', desc: 'SSE 实时接收，有新简报立即通知', icon: Radio },
@@ -298,8 +298,9 @@ const REPORT_MODE_KEY = 'aags-report-mode';
 interface ReportModeSettings {
   reportMode: ReportMode;
   scheduledTimes: string[];
+  autoScanInterval: number; // 分钟
 }
-const DEFAULT_REPORT_SETTINGS: ReportModeSettings = { reportMode: 'manual', scheduledTimes: ['08:00', '20:00'] };
+const DEFAULT_REPORT_SETTINGS: ReportModeSettings = { reportMode: 'manual', scheduledTimes: ['08:00', '20:00'], autoScanInterval: 30 };
 
 function getReportModeSettings(): ReportModeSettings {
   try {
@@ -312,10 +313,14 @@ function saveReportModeSettings(s: ReportModeSettings) {
   localStorage.setItem(REPORT_MODE_KEY, JSON.stringify(s));
 }
 
-// ==================== 子组件: 汇报模式面板 (全局, 始终可见) ====================
-function ReportModePanel() {
+// ==================== 子组件: 自动扫描面板 (全局, 始终可见) ====================
+function AutoScanPanel({ onScan, analyzing }: { onScan: () => void; analyzing: boolean }) {
   const [settings, setSettings] = useState<ReportModeSettings>(getReportModeSettings);
-  const [newTime, setNewTime] = useState('12:00');
+  const [autoRunning, setAutoRunning] = useState(false);
+  const [countdown, setCountdown] = useState(0); // 剩余秒数
+  const [lastScanTime, setLastScanTime] = useState<number | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const update = (patch: Partial<ReportModeSettings>) => {
     const next = { ...settings, ...patch };
@@ -323,13 +328,53 @@ function ReportModePanel() {
     saveReportModeSettings(next);
   };
 
-  const addTime = () => {
-    if (newTime && !settings.scheduledTimes.includes(newTime)) {
-      update({ scheduledTimes: [...settings.scheduledTimes, newTime].sort() });
-    }
-  };
-  const removeTime = (t: string) => {
-    update({ scheduledTimes: settings.scheduledTimes.filter(x => x !== t) });
+  // 清理定时器
+  const stopAutoScan = useCallback(() => {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+    setAutoRunning(false);
+    setCountdown(0);
+  }, []);
+
+  // 启动自动扫描
+  const startAutoScan = useCallback(() => {
+    const mins = settings.autoScanInterval;
+    if (mins < 1) return;
+    stopAutoScan();
+    setAutoRunning(true);
+    setLastScanTime(Date.now());
+
+    // 立即执行一次
+    onScan();
+
+    // 设置倒计时
+    const totalSec = mins * 60;
+    setCountdown(totalSec);
+
+    // 每秒更新倒计时
+    countdownRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) return totalSec; // 重置
+        return prev - 1;
+      });
+    }, 1000);
+
+    // 定时触发扫描
+    intervalRef.current = setInterval(() => {
+      setLastScanTime(Date.now());
+      onScan();
+    }, mins * 60 * 1000);
+  }, [settings.autoScanInterval, onScan, stopAutoScan]);
+
+  // 组件卸载时清理
+  useEffect(() => {
+    return () => { stopAutoScan(); };
+  }, [stopAutoScan]);
+
+  const formatCountdown = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -338,60 +383,84 @@ function ReportModePanel() {
         <summary className="flex items-center justify-between cursor-pointer list-none [&::-webkit-details-marker]:hidden">
           <h3 className="text-lg font-semibold flex items-center gap-3">
             <div className="p-2 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.15) 0%, rgba(6,182,212,0.05) 100%)' }}>
-              <CalendarClock className="w-4.5 h-4.5 text-cyan-400" />
+              <Timer className="w-4.5 h-4.5 text-cyan-400" />
             </div>
-            汇报模式
-            <span className="text-xs text-slate-500 font-normal ml-1">适用于公共服务和自建模式</span>
+            自动扫描
+            {autoRunning && (
+              <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-emerald-600/15 text-emerald-400 border border-emerald-500/20 animate-pulse">
+                ● 运行中
+              </span>
+            )}
           </h3>
           <ChevronDown className="w-5 h-5 text-slate-500 transition-transform duration-200 details-open:rotate-180" />
         </summary>
         <div className="space-y-4 mt-4">
-          <div className="grid grid-cols-3 gap-2">
-            {REPORT_MODE_OPTIONS.map(opt => {
-              const Icon = opt.icon;
-              return (
-                <button
-                  key={opt.value}
-                  className={`p-2.5 rounded-lg border text-left transition-all ${
-                    settings.reportMode === opt.value
-                      ? 'border-cyan-500/40 bg-cyan-600/10 text-cyan-400'
-                      : 'border-slate-700/50 bg-slate-800/30 text-slate-500 hover:border-slate-600'
-                  }`}
-                  onClick={() => update({ reportMode: opt.value })}
-                >
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Icon className="w-3.5 h-3.5" />
-                    <span className="text-sm font-medium">{opt.label}</span>
-                  </div>
-                  <p className="text-xs opacity-70">{opt.desc}</p>
-                </button>
-              );
-            })}
+          {/* 扫描间隔 + 启停按钮 */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-slate-400 shrink-0">扫描间隔</label>
+              <input
+                type="number"
+                min={1}
+                max={1440}
+                value={settings.autoScanInterval}
+                onChange={(e) => update({ autoScanInterval: Math.max(1, parseInt(e.target.value) || 1) })}
+                disabled={autoRunning}
+                className="input-field w-20 text-sm text-center"
+              />
+              <span className="text-sm text-slate-500">分钟</span>
+            </div>
+            <button
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                autoRunning
+                  ? 'bg-red-600/15 text-red-400 border border-red-500/30 hover:bg-red-600/25'
+                  : 'bg-emerald-600/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/25'
+              }`}
+              onClick={autoRunning ? stopAutoScan : startAutoScan}
+              disabled={analyzing && !autoRunning}
+            >
+              {autoRunning ? (
+                <><Pause className="w-4 h-4" /> 停止自动扫描</>
+              ) : (
+                <><Play className="w-4 h-4" /> 启动自动扫描</>
+              )}
+            </button>
           </div>
 
-          {settings.reportMode === 'scheduled' && (
-            <div>
-              <label className="text-sm text-slate-400 block mb-2">⏰ 汇报时间 (本地时区)</label>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {settings.scheduledTimes.map(t => (
-                  <span key={t} className="flex items-center gap-1 text-sm px-2 py-1 rounded-full bg-cyan-600/15 text-cyan-400 border border-cyan-500/20">
-                    {t}
-                    <button onClick={() => removeTime(t)} className="hover:text-red-400 transition-colors"><X className="w-3 h-3" /></button>
-                  </span>
-                ))}
+          {/* 运行状态 */}
+          {autoRunning && (
+            <div className="p-3 rounded-lg bg-emerald-600/5 border border-emerald-500/15 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-sm text-emerald-400">自动扫描运行中</span>
+                  <span className="text-sm text-slate-500">每 {settings.autoScanInterval} 分钟扫描一次</span>
+                </div>
+                <span className="text-sm font-mono text-cyan-400 tabular-nums">
+                  {analyzing ? '扫描中...' : `下次: ${formatCountdown(countdown)}`}
+                </span>
               </div>
-              <div className="flex items-center gap-2">
-                <input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="input-field w-28 text-sm" />
-                <button className="btn-secondary text-sm" onClick={addTime}>添加</button>
+              {/* 进度条 */}
+              <div className="h-1 rounded-full bg-slate-700/50 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all duration-1000"
+                  style={{ width: `${Math.max(1, ((settings.autoScanInterval * 60 - countdown) / (settings.autoScanInterval * 60)) * 100)}%` }}
+                />
               </div>
+              {lastScanTime && (
+                <p className="text-xs text-slate-600">
+                  上次扫描: {new Date(lastScanTime).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </p>
+              )}
             </div>
           )}
 
-          <p className="text-xs text-slate-600">
-            {settings.reportMode === 'realtime' && '实时模式：公共服务通过 SSE 实时推送简报；自建模式下建议配合定时任务自动触发扫描。'}
-            {settings.reportMode === 'scheduled' && `定时模式：将在每天 ${settings.scheduledTimes.join('、')} 自动执行扫描并推送结果到已配置的通知渠道。`}
-            {settings.reportMode === 'manual' && '手动模式：仅在你主动点击「扫描信号」按钮时执行扫描。'}
-          </p>
+          {/* 提示文字 */}
+          {!autoRunning && (
+            <p className="text-xs text-slate-600">
+              设置扫描间隔后点击「启动自动扫描」，系统将按设定间隔自动执行信号扫描并推送结果。适用于公共服务和自建模式。
+            </p>
+          )}
         </div>
       </details>
     </div>
@@ -1608,8 +1677,9 @@ export default function SentimentMonitor() {
         return;
       }
 
-      // 保存并处理简报
-      const saved = await saveBriefing(briefing);
+      // 保存并处理简报 (用统一时间戳确保 signalEvents 和 scoringResult 匹配)
+      const scanTimestamp = Date.now();
+      const saved = await saveBriefing(briefing, scanTimestamp);
       setMarketSummary(briefing.marketSummary);
       setNewAlerts(saved.alerts);
       setPipelineResult(briefing.pipelineInfo);
@@ -1619,9 +1689,10 @@ export default function SentimentMonitor() {
         await notifyBriefing(briefing);
       }
 
-      // 重算评分
+      // 重算评分 (使用相同时间戳)
       const allEvents = await db.signalEvents.toArray();
       const result = SentinelScoringEngine.calculateScores(allEvents);
+      result.timestamp = scanTimestamp;
       setScores(result);
       setGridParams(SentinelScoringEngine.mapToGridParams(result));
       result.scanMode = 'public-service';
@@ -1762,8 +1833,8 @@ export default function SentimentMonitor() {
         </div>
       )}
 
-      {/* 汇报模式 (全局, 始终可见) */}
-      <ReportModePanel />
+      {/* 自动扫描 (全局, 始终可见) */}
+      <AutoScanPanel onScan={handleScan} analyzing={analyzing} />
 
       {/* 管线配置 (双模式) */}
       <PipelineConfigPanel scanMode={scanMode} onModeChange={setScanMode} />

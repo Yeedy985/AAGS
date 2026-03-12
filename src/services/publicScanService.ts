@@ -200,20 +200,17 @@ function parseBriefing(raw: any): ScanBriefing {
 }
 
 // ==================== 保存简报 & 转换为系统事件 ====================
-export async function saveBriefing(briefing: ScanBriefing): Promise<{
+export async function saveBriefing(briefing: ScanBriefing, overrideTimestamp?: number): Promise<{
   events: SignalEvent[];
   alerts: EventAlert[];
 }> {
-  // 去重: 如果同 briefingId 已存在则跳过
+  // 简报去重: 如果同 briefingId 已存在则不重复存简报，但信号事件仍然创建
   const existing = await db.scanBriefings.where('briefingId').equals(briefing.briefingId).first();
-  if (existing) {
-    return { events: [], alerts: [] };
+  if (!existing) {
+    await db.scanBriefings.add(briefing);
   }
 
-  // 保存简报
-  await db.scanBriefings.add(briefing);
-
-  const now = Date.now();
+  const now = overrideTimestamp || Date.now();
 
   // 转换为 SignalEvent 存入评分系统
   const signalDefs = await db.signalDefinitions.toArray();
@@ -231,7 +228,7 @@ export async function saveBriefing(briefing: ScanBriefing): Promise<{
       title: t.title,
       summary: t.summary,
       source: `[公共服务] ${t.source}`,
-      triggeredAt: briefing.timestamp || now,
+      triggeredAt: now,
     };
   }).filter(e => e.impact !== 0);
 

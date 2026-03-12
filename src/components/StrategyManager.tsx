@@ -311,9 +311,18 @@ export default function StrategyManager() {
                   </div>
                   <div>
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>成交/配对</p>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold`}>
-                      {allTradeRecords.filter(t => t.strategyId === s.id).length}笔 / {s.totalTrades}对
-                    </p>
+                    {(() => {
+                      const trades = allTradeRecords.filter(t => t.strategyId === s.id);
+                      const tradeGroups = new Map<string, { buys: number; sells: number }>();
+                      for (const t of trades) {
+                        const k = `${t.layer}_${t.gridIndex}`;
+                        const g = tradeGroups.get(k) || { buys: 0, sells: 0 };
+                        if (t.side === 'buy') g.buys++; else g.sells++;
+                        tradeGroups.set(k, g);
+                      }
+                      const pairs = Array.from(tradeGroups.values()).reduce((sum, g) => sum + Math.min(g.buys, g.sells), 0);
+                      return <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold`}>{trades.length}笔 / {pairs}对</p>;
+                    })()}
                   </div>
                   {!isMobile && (
                     <div>
