@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { placeOrder, getPrice, cancelOrder, setCurrentExchange, getKlines, queryOrder, getAllOrders, getExchangeInfo, getMyTrades } from './binance';
 import { generateGridOrders, detectTrend, formatQuantity, formatPrice } from './gridEngine';
+import { syncStrategyData } from './strategyPlazaService';
 import type { Strategy, GridOrder, ApiConfig, SymbolInfo } from '../types';
 
 // ==================== 执行引擎状态 ====================
@@ -11,6 +12,8 @@ interface ExecutorState {
 
 const _executors: Map<number, ExecutorState> = new Map();
 const _checkLocks: Map<number, boolean> = new Map(); // 防并发锁
+const _lastPlazaSync: Map<number, number> = new Map(); // 策略广场上次同步时间
+const PLAZA_SYNC_INTERVAL = 5 * 60 * 1000; // 每 5 分钟同步一次
 let _onStrategyUpdate: ((strategy: Strategy) => void) | null = null;
 let _onLog: ((strategyId: number, msg: string) => void) | null = null;
 
@@ -181,6 +184,47 @@ export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, sy
   startMonitorLoop(strategy.id, apiConfig, symbolInfo);
 }
 
+// ==================== 策略广场同步 ====================
+async function maybeSyncToPlaza(strategyId: number) {
+  const now = Date.now();
+  const lastSync = _lastPlazaSync.get(strategyId) || 0;
+  if (now - lastSync < PLAZA_SYNC_INTERVAL) return;
+
+  // 检查本地是否有分享记录
+  let shareCodes: Record<string, string> = {};
+  try {
+    const saved = localStorage.getItem('aags_share_codes');
+    if (saved) shareCodes = JSON.parse(saved);
+  } catch { return; }
+
+  const shareCode = shareCodes[strategyId];
+  if (!shareCode) return;
+
+  const strategy = await db.strategies.get(strategyId);
+  if (!strategy) return;
+
+  const totalGridCount = strategy.layers.filter(l => l.enabled).reduce((a, l) => a + l.gridCount, 0);
+  const pnlPct = strategy.totalFund > 0 ? (strategy.totalProfit / strategy.totalFund * 100) : 0;
+  const runSec = strategy.startedAt ? Math.floor((now - strategy.startedAt) / 1000) : 0;
+
+  try {
+    await syncStrategyData(shareCode, {
+      pnlUsdt: strategy.totalProfit,
+      pnlPercent: pnlPct,
+      runSeconds: runSec,
+      matchCount: strategy.winTrades,
+      totalGrids: totalGridCount,
+      maxDrawdownPct: strategy.maxDrawdown,
+      isRunning: strategy.status === 'running',
+    });
+    _lastPlazaSync.set(strategyId, now);
+    log(strategyId, `[策略广场] 收益数据已同步`);
+  } catch (err: any) {
+    // 同步失败不影响策略运行，静默处理
+    console.warn(`[策略广场] 同步失败 (策略${strategyId}):`, err.message);
+  }
+}
+
 // ==================== 订单监控循环 ====================
 export function startMonitorLoop(strategyId: number, apiConfig: ApiConfig, symbolInfo?: SymbolInfo) {
   if (_executors.get(strategyId)?.running) return;
@@ -207,6 +251,8 @@ export function startMonitorLoop(strategyId: number, apiConfig: ApiConfig, symbo
     } catch (err: any) {
       log(strategyId, `监控异常: ${err.message}`);
     }
+    // 策略广场同步 (每 5 分钟)
+    await maybeSyncToPlaza(strategyId);
   }, 10000);
 
   log(strategyId, '订单监控已启动 (10s 轮询)');

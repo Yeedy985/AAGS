@@ -388,11 +388,21 @@ export class SentinelScoringEngine {
    * 3. 三维评分分布更合理: 日常 SD±20~40, SV 10~35, SR 5~25
    */
   static calculateScores(events: SignalEvent[]): ScoringResult {
+    // 同一 signalId 只保留最新一条 (防止多次扫描叠加导致评分虚高)
+    const latestBySignal = new Map<number, SignalEvent>();
+    for (const e of events) {
+      const existing = latestBySignal.get(e.signalId);
+      if (!existing || e.triggeredAt > existing.triggeredAt) {
+        latestBySignal.set(e.signalId, e);
+      }
+    }
+    const dedupedEvents = Array.from(latestBySignal.values());
+
     let sD = 0, sV = 0, sR = 0;
     const now = Date.now();
     let activeCount = 0;
 
-    for (const event of events) {
+    for (const event of dedupedEvents) {
       const deltaMinutes = (now - event.triggeredAt) / 60000;
       // λ = ln(2) / halfLife
       const lambda = Math.LN2 / event.halfLife;

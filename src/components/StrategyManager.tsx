@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronUp, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Loader2, AlertCircle, Share2, X as XIcon } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useStore } from '../store/useStore';
 import { db } from '../db';
 import type { Strategy } from '../types';
 import StrategyCreator from './StrategyCreator';
 import StrategyDetail from './StrategyDetail';
+import StrategyPlaza from './StrategyPlaza';
 import { startStrategy, stopStrategy, pauseStrategy, resumeStrategy, setExecutorCallbacks, updateStrategyProfit, repairMissingTradeRecords } from '../services/strategyExecutor';
+import { shareStrategy, unshareStrategy } from '../services/strategyPlazaService';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 function formatRuntime(startedAt?: number): string {
@@ -154,6 +156,103 @@ export default function StrategyManager() {
     setShowCreator(false);
   };
 
+  // ── 分享相关 ──
+  const [shareModalStrategy, setShareModalStrategy] = useState<Strategy | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState('');
+  // shareCode 映射: strategyId → shareCode (本地存储)
+  const [shareCodes, setShareCodes] = useState<Record<number, string>>({});
+
+  // 加载已保存的 shareCodes
+  useEffect(() => {
+    const saved = localStorage.getItem('aags_share_codes');
+    if (saved) try { setShareCodes(JSON.parse(saved)); } catch {}
+  }, []);
+  const saveShareCode = (strategyId: number, code: string) => {
+    setShareCodes(prev => {
+      const next = { ...prev, [strategyId]: code };
+      localStorage.setItem('aags_share_codes', JSON.stringify(next));
+      return next;
+    });
+  };
+  const removeShareCode = (strategyId: number) => {
+    setShareCodes(prev => {
+      const next = { ...prev };
+      delete next[strategyId];
+      localStorage.setItem('aags_share_codes', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleShare = async (strategy: Strategy) => {
+    if (!strategy.id) return;
+    setSharing(true);
+    setShareError('');
+    try {
+      const totalGridCount = strategy.layers.filter(l => l.enabled).reduce((a, l) => a + l.gridCount, 0);
+      const pnlPct = strategy.totalFund > 0 ? (strategy.totalProfit / strategy.totalFund * 100) : 0;
+      const runSec = strategy.startedAt ? Math.floor((Date.now() - strategy.startedAt) / 1000) : 0;
+
+      // 构建安全的 gridConfig (不含任何敏感信息)
+      const gridConfig = {
+        totalFund: strategy.totalFund,
+        rangeMode: strategy.rangeMode,
+        upperPrice: strategy.upperPrice,
+        lowerPrice: strategy.lowerPrice,
+        centerPrice: strategy.centerPrice,
+        atrPeriod: strategy.atrPeriod,
+        atrMultiplier: strategy.atrMultiplier,
+        layers: strategy.layers,
+        profitAllocation: strategy.profitAllocation,
+        profitRatio: strategy.profitRatio,
+        profitThreshold: strategy.profitThreshold,
+        trendSellAbovePercent: strategy.trendSellAbovePercent,
+        trendBuyBelowPercent: strategy.trendBuyBelowPercent,
+        risk: strategy.risk,
+        autoRebalance: strategy.autoRebalance,
+        rebalanceStepPercent: strategy.rebalanceStepPercent,
+        endMode: strategy.endMode,
+      };
+
+      const result = await shareStrategy({
+        symbol: strategy.symbol,
+        baseAsset: strategy.baseAsset,
+        quoteAsset: strategy.quoteAsset,
+        strategyName: strategy.name,
+        gridConfig,
+        pnlUsdt: strategy.totalProfit,
+        pnlPercent: pnlPct,
+        runSeconds: runSec,
+        matchCount: strategy.winTrades,
+        totalGrids: totalGridCount,
+        maxDrawdownPct: strategy.maxDrawdown,
+        minInvestUsdt: strategy.totalFund,
+        isRunning: strategy.status === 'running',
+      });
+      saveShareCode(strategy.id, result.shareCode);
+      setShareModalStrategy(null);
+    } catch (err: any) {
+      setShareError(err.message || '分享失败');
+    }
+    setSharing(false);
+  };
+
+  const handleUnshare = async (strategyId: number) => {
+    const code = shareCodes[strategyId];
+    if (!code) return;
+    try {
+      await unshareStrategy(code);
+      removeShareCode(strategyId);
+    } catch (err: any) {
+      alert('取消分享失败: ' + err.message);
+    }
+  };
+
+  // 从策略广场复制策略后，刷新本地列表
+  const handleCopyFromPlaza = (strategy: Strategy) => {
+    setStrategies([...strategies, strategy]);
+  };
+
   const statusLabels: Record<string, { text: string; class: string }> = {
     idle: { text: '待启动', class: 'badge-blue' },
     running: { text: '运行中', class: 'badge-green' },
@@ -164,7 +263,7 @@ export default function StrategyManager() {
   };
 
   return (
-    <div className={isMobile ? 'space-y-3' : 'space-y-6'}>
+    <div className={isMobile ? 'space-y-3' : 'space-y-4'}>
       <div className="flex items-center justify-between">
         <h1 className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>策略管理</h1>
         <button className={`btn-primary flex items-center gap-1.5 ${isMobile ? 'text-xs px-3 py-2' : ''}`} onClick={() => setShowCreator(true)}>
@@ -178,7 +277,51 @@ export default function StrategyManager() {
         <StrategyCreator onCreated={handleCreated} onCancel={() => setShowCreator(false)} />
       )}
 
-      {/* Strategy List */}
+      {/* Share Confirmation Modal */}
+      {shareModalStrategy && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md mx-4 rounded-2xl bg-slate-900 border border-slate-700 p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white">分享策略到策略广场</h3>
+              <button onClick={() => setShareModalStrategy(null)} className="text-slate-400 hover:text-white"><XIcon className="w-5 h-5" /></button>
+            </div>
+            <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <p className="text-sm text-amber-300 font-medium mb-1">隐私说明</p>
+              <p className="text-xs text-amber-200/70 leading-relaxed">
+                仅上传策略参数和运行收益数据，<strong className="text-amber-200">不会上传任何 API Key、账户信息或个人隐私数据</strong>。
+                其他用户可以看到：交易对、网格配置、收益率、运行时长等。你可以随时取消分享。
+              </p>
+            </div>
+            <div className="mb-4 p-3 rounded-lg bg-slate-800 text-sm">
+              <p className="text-slate-400">策略: <span className="text-white font-medium">{shareModalStrategy.name}</span></p>
+              <p className="text-slate-400 mt-1">交易对: <span className="text-white">{shareModalStrategy.symbol}</span></p>
+              <p className="text-slate-400 mt-1">投资额: <span className="text-white">{shareModalStrategy.totalFund} USDT</span></p>
+            </div>
+            {shareError && <p className="text-sm text-red-400 mb-3">{shareError}</p>}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShareModalStrategy(null)}
+                className="flex-1 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-medium text-slate-300"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => handleShare(shareModalStrategy)}
+                disabled={sharing}
+                className="flex-1 py-2.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-sm font-bold text-white flex items-center justify-center gap-2"
+              >
+                {sharing && <Loader2 className="w-4 h-4 animate-spin" />}
+                确认分享
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Left-Right Split Layout */}
+      <div className={`flex ${isMobile ? 'flex-col gap-4' : 'gap-6'}`} style={isMobile ? {} : { minHeight: 'calc(100vh - 180px)' }}>
+        {/* Left: My Strategies */}
+        <div className={isMobile ? 'w-full' : 'w-[45%] shrink-0 overflow-y-auto'}>
       {strategies.length === 0 ? (
         <div className={`card ${isMobile ? 'py-10' : 'py-16'} text-center`}>
           <p className={`text-slate-500 ${isMobile ? 'text-base' : 'text-lg'}`}>暂无策略</p>
@@ -602,6 +745,24 @@ export default function StrategyManager() {
                       >
                         {isExpanded ? <ChevronUp className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} /> : <ChevronDown className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />}
                       </button>
+                      {/* Share / Unshare button */}
+                      {shareCodes[s.id!] ? (
+                        <button
+                          className={`${isMobile ? 'p-2' : 'p-2.5'} rounded-lg bg-cyan-900/20 hover:bg-cyan-900/30 text-cyan-400 transition-colors`}
+                          onClick={() => handleUnshare(s.id!)}
+                          title="取消分享"
+                        >
+                          <Share2 className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+                        </button>
+                      ) : (
+                        <button
+                          className={`${isMobile ? 'p-2' : 'p-2.5'} rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors`}
+                          onClick={() => setShareModalStrategy(s)}
+                          title="分享到策略广场"
+                        >
+                          <Share2 className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+                        </button>
+                      )}
                       {s.status !== 'running' && (
                         <button
                           className={`${isMobile ? 'p-2' : 'p-2.5'} rounded-lg bg-red-900/20 hover:bg-red-900/30 text-red-400 transition-colors`}
@@ -645,6 +806,13 @@ export default function StrategyManager() {
           })}
         </div>
       )}
+        </div>
+
+        {/* Right: Strategy Plaza */}
+        <div className={isMobile ? 'w-full' : 'flex-1 min-w-0 overflow-y-auto'}>
+          <StrategyPlaza onCopyStrategy={handleCopyFromPlaza} />
+        </div>
+      </div>
     </div>
   );
 }

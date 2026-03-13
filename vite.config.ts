@@ -138,12 +138,19 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/dataapi\/alternative/, ''),
         secure: true,
       },
+      // DeFi Llama (免费, 无需API Key)
+      '/dataapi/defillama': {
+        target: 'https://api.llama.fi',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/dataapi\/defillama/, ''),
+        secure: true,
+      },
       // 公共扫描服务
       '/scanapi': {
-        target: 'http://43.156.216.141:3005',
+        target: 'https://alphinel.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/scanapi/, ''),
-        secure: false,
+        secure: true,
       },
     },
   },

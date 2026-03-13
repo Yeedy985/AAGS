@@ -281,7 +281,7 @@ function LLMConfigPanel() {
 }
 
 // ==================== 子组件: 公共服务配置面板 ====================
-const DEFAULT_SERVER_URL = 'http://43.156.216.141:3005';
+const DEFAULT_SERVER_URL = 'https://alphinel.com';
 
 const REPORT_MODE_OPTIONS: { value: ReportMode; label: string; desc: string; icon: typeof Radio }[] = [
   { value: 'realtime', label: '实时推送', desc: 'SSE 实时接收，有新简报立即通知', icon: Radio },
@@ -490,10 +490,18 @@ const _globalAutoScan = {
     this.running = true;
     this.intervalMins = mins;
     this.totalSec = mins * 60;
-    if (this.startedAt > 0) {
+    // 恢复时计算剩余倒计时
+    if (this.startedAt > 0 && !triggerNow) {
       const elapsed = Math.floor((Date.now() - this.startedAt) / 1000);
       const cycleElapsed = elapsed % this.totalSec;
       this.countdown = this.totalSec - cycleElapsed;
+      // 如果恢复时发现已过期(比如浏览器刚打开)，立即触发
+      if (this.countdown <= 2) {
+        this.countdown = this.totalSec;
+        this.lastScanTime = Date.now();
+        console.log('[AutoScan] 恢复时发现已到期，立即触发扫描');
+        backgroundScan();
+      }
     } else {
       this.countdown = this.totalSec;
     }
@@ -501,19 +509,26 @@ const _globalAutoScan = {
       this.lastScanTime = Date.now();
       backgroundScan();
     }
+    // 合并为单一定时器: 倒计时到0时直接触发扫描 (避免双setInterval漂移)
+    this._lastTick = Date.now();
     this.countdownId = setInterval(() => {
-      this.countdown = this.countdown <= 1 ? this.totalSec : this.countdown - 1;
+      // 用实际时间差而非假设1秒，防止浏览器后台节流导致漂移
+      const now = Date.now();
+      const realElapsed = Math.round((now - (this._lastTick || now)) / 1000);
+      this._lastTick = now;
+      this.countdown = Math.max(0, this.countdown - Math.max(1, realElapsed));
+      if (this.countdown <= 0) {
+        this.countdown = this.totalSec;
+        this.lastScanTime = Date.now();
+        console.log('[AutoScan] 倒计时归零，触发扫描!', new Date().toLocaleTimeString());
+        _saveAagsScanState({ running: true, intervalMins: mins, startedAt: this.startedAt });
+        backgroundScan();
+      }
       this.notify();
     }, 1000);
-    this.intervalId = setInterval(() => {
-      console.log('[AutoScan] 定时器触发! 调用 backgroundScan()', new Date().toLocaleTimeString());
-      this.lastScanTime = Date.now();
-      _saveAagsScanState({ running: true, intervalMins: mins, startedAt: this.startedAt });
-      backgroundScan();
-      this.notify();
-    }, mins * 60 * 1000);
     this.notify();
   },
+  _lastTick: 0 as number,
   start(mins: number) {
     this.stop();
     this.startedAt = Date.now();
@@ -667,7 +682,7 @@ function PublicServiceConfigPanel() {
 
   // ── 连接表单 ──
   const [showForm, setShowForm] = useState(false);
-  const [serverUrl, setServerUrl] = useState(DEFAULT_SERVER_URL);
+  const [serverUrl] = useState(DEFAULT_SERVER_URL);
   const [authToken, setAuthToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -889,7 +904,7 @@ function PublicServiceConfigPanel() {
         <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 space-y-4">
           <div>
             <label className="text-sm text-slate-400 block mb-1">服务器地址</label>
-            <input className="input-field" placeholder={DEFAULT_SERVER_URL} value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} />
+            <input className="input-field bg-slate-800/60 text-slate-500 cursor-not-allowed" value={serverUrl} readOnly />
           </div>
           <div>
             <label className="text-sm text-slate-400 block mb-1">认证令牌</label>
@@ -968,7 +983,7 @@ function PublicServiceConfigPanel() {
                   <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 space-y-3">
                     <div>
                       <label className="text-sm text-slate-400 block mb-1">服务器地址</label>
-                      <input className="input-field" value={editUrl} onChange={(e) => setEditUrl(e.target.value)} />
+                      <input className="input-field bg-slate-800/60 text-slate-500 cursor-not-allowed" value={editUrl} readOnly />
                     </div>
                     <div>
                       <label className="text-sm text-slate-400 block mb-1">API 认证令牌</label>
@@ -1873,7 +1888,7 @@ function SignalEventHistory() {
                     </div>
                     <p className="text-sm mt-1.5 ml-6">
                       {isToken
-                        ? <span className="text-amber-400/80">💡 Token 余额不足，请前往 <a href="http://43.156.216.141:3005/dashboard" target="_blank" rel="noopener noreferrer" className="underline text-cyan-400 hover:text-cyan-300">Sentinel-X 主页</a> 充值</span>
+                        ? <span className="text-amber-400/80">💡 Token 余额不足，请前往 <a href="https://alphinel.com/dashboard" target="_blank" rel="noopener noreferrer" className="underline text-cyan-400 hover:text-cyan-300">AlphaSentinel 主页</a> 充值</span>
                         : isRateLimit
                         ? <span className="text-amber-400/70">⏱️ 请求频率受限，请联系管理员调高限制或降低扫描频率</span>
                         : f.errorDetail && <span className="text-slate-500">{f.errorDetail}</span>
@@ -1914,18 +1929,42 @@ export default function SentimentMonitor() {
     }
   }, [publicConfigs]);
 
-  // 每次加载时从DB重算评分，但保留最近一次保存的扫描时间戳
+  // 每次加载时清理旧重复信号 + 重算评分
   const signalEvents = useLiveQuery(() => db.signalEvents.toArray(), []);
+  const cleanupDoneRef = useRef(false);
   useEffect(() => {
-    if (signalEvents && signalEvents.length > 0) {
-      const result = SentinelScoringEngine.calculateScores(signalEvents);
-      // 从 DB 恢复最近保存的评分时间戳，避免"扫描于"时间随实时刷新
-      db.scoringResults.orderBy('timestamp').reverse().first().then(latest => {
-        if (latest) result.timestamp = latest.timestamp;
-        setScores(result);
-        setGridParams(SentinelScoringEngine.mapToGridParams(result));
-      });
+    if (!signalEvents || signalEvents.length === 0) return;
+    // 首次加载时清理 DB 重复信号 (同一 signalId 只保留最新)
+    if (!cleanupDoneRef.current && signalEvents.length > 300) {
+      cleanupDoneRef.current = true;
+      const latestMap = new Map<number, typeof signalEvents[0]>();
+      const idsToDelete: number[] = [];
+      for (const ev of signalEvents) {
+        const existing = latestMap.get(ev.signalId);
+        if (existing) {
+          if (ev.triggeredAt > existing.triggeredAt) {
+            if (existing.id) idsToDelete.push(existing.id);
+            latestMap.set(ev.signalId, ev);
+          } else {
+            if (ev.id) idsToDelete.push(ev.id);
+          }
+        } else {
+          latestMap.set(ev.signalId, ev);
+        }
+      }
+      if (idsToDelete.length > 0) {
+        db.signalEvents.bulkDelete(idsToDelete).then(() => {
+          console.log(`[初始化] 清理了 ${idsToDelete.length} 条旧重复信号事件 (${signalEvents.length} → ${latestMap.size})`);
+        });
+      }
     }
+    const result = SentinelScoringEngine.calculateScores(signalEvents);
+    // 从 DB 恢复最近保存的评分时间戳，避免"扫描于"时间随实时刷新
+    db.scoringResults.orderBy('timestamp').reverse().first().then(latest => {
+      if (latest) result.timestamp = latest.timestamp;
+      setScores(result);
+      setGridParams(SentinelScoringEngine.mapToGridParams(result));
+    });
   }, [signalEvents]);
 
   // 每次加载时从DB恢复最新 marketSummary
@@ -1951,8 +1990,28 @@ export default function SentimentMonitor() {
         await notifyBriefing(briefing);
       }
 
+      // 清理 DB 中同一 signalId 的旧重复记录 (只保留最新一条，防止评分虚高)
       const allEvents = await db.signalEvents.toArray();
-      const result = SentinelScoringEngine.calculateScores(allEvents);
+      const latestMap = new Map<number, typeof allEvents[0]>();
+      const idsToDelete: number[] = [];
+      for (const ev of allEvents) {
+        const existing = latestMap.get(ev.signalId);
+        if (existing) {
+          if (ev.triggeredAt > existing.triggeredAt) {
+            if (existing.id) idsToDelete.push(existing.id);
+            latestMap.set(ev.signalId, ev);
+          } else {
+            if (ev.id) idsToDelete.push(ev.id);
+          }
+        } else {
+          latestMap.set(ev.signalId, ev);
+        }
+      }
+      if (idsToDelete.length > 0) {
+        await db.signalEvents.bulkDelete(idsToDelete);
+        console.log(`[${source}] 清理了 ${idsToDelete.length} 条旧重复信号事件`);
+      }
+      const result = SentinelScoringEngine.calculateScores(Array.from(latestMap.values()));
       result.timestamp = scanTimestamp;
       result.scanMode = 'public-service';
       if (briefing.serverTokenUsage) result.serverTokenUsage = briefing.serverTokenUsage;
@@ -2072,8 +2131,28 @@ export default function SentimentMonitor() {
       if (manualSuggestions.length > 0) setLatestSuggestions(manualSuggestions);
 
       // 重算评分
+      // 清理 DB 中同一 signalId 的旧重复记录 (只保留最新一条)
       const allEvents = await db.signalEvents.toArray();
-      const result = SentinelScoringEngine.calculateScores(allEvents);
+      const latestMap = new Map<number, typeof allEvents[0]>();
+      const idsToDelete: number[] = [];
+      for (const ev of allEvents) {
+        const existing = latestMap.get(ev.signalId);
+        if (existing) {
+          if (ev.triggeredAt > existing.triggeredAt) {
+            if (existing.id) idsToDelete.push(existing.id);
+            latestMap.set(ev.signalId, ev);
+          } else {
+            if (ev.id) idsToDelete.push(ev.id);
+          }
+        } else {
+          latestMap.set(ev.signalId, ev);
+        }
+      }
+      if (idsToDelete.length > 0) {
+        await db.signalEvents.bulkDelete(idsToDelete);
+        console.log(`[自建扫描] 清理了 ${idsToDelete.length} 条旧重复信号事件`);
+      }
+      const result = SentinelScoringEngine.calculateScores(Array.from(latestMap.values()));
       setScores(result);
       setGridParams(SentinelScoringEngine.mapToGridParams(result));
 
@@ -2163,9 +2242,11 @@ export default function SentimentMonitor() {
         const elapsed = Math.round((Date.now() - start) / 1000);
         setProgress({ step: 1, totalSteps: 2, label: '⏳ 等待扫描结果', detail: `已等待 ${elapsed}s / 预计 ${estimatedSeconds}s (${briefingId.slice(0, 8)}...)` });
         try {
-          const briefings = await fetchLatestBriefings(config, 5);
+          const briefings = await fetchLatestBriefings(config, 10);
+          console.log(`[PublicScan] 轮询 ${elapsed}s: 获取到 ${briefings.length} 条简报`, briefings.map(b => b.briefingId));
           const match = briefings.find(b => b.briefingId === briefingId);
           if (match) {
+            console.log(`[PublicScan] ✅ 匹配到 briefing ${briefingId}`);
             briefing = match;
             break;
           }
