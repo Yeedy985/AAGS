@@ -450,6 +450,57 @@ export interface ScanBriefing {
   notified: boolean;          // 是否已推送到社交工具
 }
 
+// ==================== 交易状态机 (Phase 0.5) ====================
+
+export type TradeState = 'WAITING' | 'PRE_ENTRY' | 'IN_TRADE' | 'EXIT_READY' | 'COOLDOWN';
+
+export interface TradeSuggestion {
+  coin: string;
+  action: 'BUY' | 'SELL' | 'HOLD' | 'CLOSE';
+  entryPrice: number;
+  targetPrice: number;
+  stopLoss: number;
+  confidence: number;       // 0-1
+  timeframe: string;        // '1h' | '4h' | '1d'
+  reasoning: string;
+  anchorSource: string;     // 基于哪个锚点给出的建议
+}
+
+export interface TradeContext {
+  id?: number;
+  coin: string;              // 交易对 e.g. 'BTCUSDT'
+  state: TradeState;
+  // 建议信息
+  suggestion?: TradeSuggestion;
+  // 状态机元数据
+  stateEnteredAt: number;    // 进入当前状态的时间戳
+  lastEvaluatedAt: number;   // 上次评估时间
+  lastSignalHash: string;    // 上次信号组合的hash (用于去噪: 信号没变则不更新)
+  // 入场信息 (IN_TRADE 状态下有效)
+  entryPrice?: number;
+  entryTime?: number;
+  targetPrice?: number;
+  stopLoss?: number;
+  // 退出信息
+  exitPrice?: number;
+  exitTime?: number;
+  exitReason?: 'TARGET_HIT' | 'STOP_LOSS' | 'SIGNAL_REVERSAL' | 'TIMEOUT' | 'MANUAL';
+  // 追踪
+  peakPrice?: number;        // 持仓期间最高价
+  troughPrice?: number;      // 持仓期间最低价
+  stateHistory: TradeStateTransition[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TradeStateTransition {
+  from: TradeState;
+  to: TradeState;
+  reason: string;
+  timestamp: number;
+  scoreSnapshot?: { sd: number; sv: number; sr: number };
+}
+
 // ==================== 系统设置 ====================
 export interface AppSettings {
   encryptionKey: string;

@@ -20,6 +20,7 @@ import {
   connectSSE, saveBriefing, notifyBriefing,
 } from '../services/publicScanService';
 import { notifyScanResult, notifyAlert, notifyScanFailure } from '../services/notificationService';
+import { evaluateAfterScan } from '../services/tradeContextIntegration';
 import type {
   SignalGroup, SignalDefinition, ScoringResult,
   GridAutoParams, LLMProvider, LLMRole, EventAlert,
@@ -355,6 +356,7 @@ async function backgroundScan() {
       if (briefing.startedAt) result.serverStartedAt = briefing.startedAt;
       if (briefing.completedAt) result.serverCompletedAt = briefing.completedAt;
       await db.scoringResults.add(result);
+      evaluateAfterScan(result).catch(e => console.warn('[AutoScan] 状态机评估失败:', e.message));
       notifyScanResult(briefing, result).catch((err: any) => console.warn('[AutoScan] 推送失败:', err));
       console.log(`[AutoScan] 公共服务扫描完成 briefingId=${briefingId}`);
       return;
@@ -385,6 +387,7 @@ async function backgroundScan() {
     result.tokenUsage = tokenUsage;
     result.scanMode = 'self-hosted';
     await db.scoringResults.add(result);
+    evaluateAfterScan(result).catch(e => console.warn('[AutoScan] 状态机评估失败:', e.message));
 
     // 保存 ScanBriefing
     const briefing: ScanBriefing = {
@@ -1921,6 +1924,7 @@ export default function SentimentMonitor() {
       result.tokenUsage = tokenUsage;
       result.scanMode = 'self-hosted';
       await db.scoringResults.add(result);
+      evaluateAfterScan(result).catch(e => console.warn('[手动扫描] 状态机评估失败:', e.message));
 
       // 保存 ScanBriefing 以持久化 marketSummary
       const briefing: ScanBriefing = {
@@ -2037,6 +2041,7 @@ export default function SentimentMonitor() {
       setScores(result);
       setGridParams(SentinelScoringEngine.mapToGridParams(result));
       await db.scoringResults.add(result);
+      evaluateAfterScan(result).catch(e => console.warn('[公共扫描] 状态机评估失败:', e.message));
 
       // 推送扫描结果到用户配置的通知渠道
       notifyScanResult(briefing, result).catch((err: any) => console.warn('推送扫描结果失败:', err));

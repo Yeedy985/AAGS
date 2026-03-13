@@ -3,7 +3,7 @@ import type {
   ApiConfig, Strategy, GridOrder, TradeRecord, EquitySnapshot,
   SignalDefinition, SignalEvent, ScoringResult,
   EventAlert, LLMConfig, NotificationConfig,
-  PublicServiceConfig, ScanBriefing,
+  PublicServiceConfig, ScanBriefing, TradeContext,
 } from '../types';
 
 class AAGSDatabase extends Dexie {
@@ -21,6 +21,7 @@ class AAGSDatabase extends Dexie {
   publicServiceConfigs!: Table<PublicServiceConfig>;
   scanBriefings!: Table<ScanBriefing>;
   scanFailures!: Table<{ id?: number; timestamp: number; reason: string; errorDetail: string; mode: string }>;
+  tradeContexts!: Table<TradeContext>;
 
   constructor() {
     super('aags-db');
@@ -110,6 +111,25 @@ class AAGSDatabase extends Dexie {
       publicServiceConfigs: '++id, enabled',
       scanBriefings: '++id, briefingId, mode, timestamp, receivedAt, notified',
       scanFailures: '++id, timestamp, reason',
+    });
+
+    // v7: 交易状态机 (Phase 0.5)
+    this.version(7).stores({
+      apiConfigs: '++id, label, exchange',
+      strategies: '++id, symbol, status, createdAt',
+      gridOrders: '++id, strategyId, layer, status, binanceOrderId',
+      tradeRecords: '++id, strategyId, layer, timestamp',
+      equitySnapshots: '++id, strategyId, timestamp',
+      signalDefinitions: '++id, signalId, group, category, enabled',
+      signalEvents: '++id, signalId, group, category, triggeredAt',
+      scoringResults: '++id, timestamp',
+      eventAlerts: '++id, level, group, notified, createdAt',
+      llmConfigs: '++id, provider, enabled',
+      notificationConfigs: '++id, channel, enabled',
+      publicServiceConfigs: '++id, enabled',
+      scanBriefings: '++id, briefingId, mode, timestamp, receivedAt, notified',
+      scanFailures: '++id, timestamp, reason',
+      tradeContexts: '++id, coin, state, updatedAt',
     });
   }
 }
