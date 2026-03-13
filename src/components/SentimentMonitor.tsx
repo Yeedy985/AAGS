@@ -445,20 +445,21 @@ async function backgroundScan() {
   }
 }
 
-// ==================== 全局自动扫描单例 (sessionStorage 持久化, 跨页面/刷新恢复) ====================
+// ==================== 全局自动扫描单例 (localStorage 持久化, 跨关闭/重启恢复) ====================
 const AAGS_AUTO_SCAN_KEY = 'aags-auto-scan-state';
 
-function _loadAagsScanState(): { running: boolean; intervalMins: number; startedAt: number } | null {
+interface AagsScanState { running: boolean; intervalMins: number; startedAt: number; lastScanTime: number }
+function _loadAagsScanState(): AagsScanState | null {
   try {
-    const raw = sessionStorage.getItem(AAGS_AUTO_SCAN_KEY);
+    const raw = localStorage.getItem(AAGS_AUTO_SCAN_KEY);
     if (raw) return JSON.parse(raw);
   } catch {}
   return null;
 }
-function _saveAagsScanState(state: { running: boolean; intervalMins: number; startedAt: number } | null) {
+function _saveAagsScanState(state: AagsScanState | null) {
   try {
-    if (state) sessionStorage.setItem(AAGS_AUTO_SCAN_KEY, JSON.stringify(state));
-    else sessionStorage.removeItem(AAGS_AUTO_SCAN_KEY);
+    if (state) localStorage.setItem(AAGS_AUTO_SCAN_KEY, JSON.stringify(state));
+    else localStorage.removeItem(AAGS_AUTO_SCAN_KEY);
   } catch {}
 }
 
@@ -492,15 +493,21 @@ const _globalAutoScan = {
     this.totalSec = mins * 60;
     // 恢复时计算剩余倒计时
     if (this.startedAt > 0 && !triggerNow) {
-      const elapsed = Math.floor((Date.now() - this.startedAt) / 1000);
-      const cycleElapsed = elapsed % this.totalSec;
-      this.countdown = this.totalSec - cycleElapsed;
-      // 如果恢复时发现已过期(比如浏览器刚打开)，立即触发
-      if (this.countdown <= 2) {
+      const now = Date.now();
+      const lastScan = this.lastScanTime || this.startedAt;
+      const sinceLast = Math.floor((now - lastScan) / 1000);
+      const intervalSec = this.totalSec;
+      if (sinceLast >= intervalSec) {
+        // 关闭期间已错过至少一次扫描，立即补扫一次
         this.countdown = this.totalSec;
-        this.lastScanTime = Date.now();
-        console.log('[AutoScan] 恢复时发现已到期，立即触发扫描');
+        this.lastScanTime = now;
+        console.log(`[AutoScan] 恢复时发现已错过扫描 (${Math.floor(sinceLast/60)}分钟前应该执行)，立即触发`);
+        _saveAagsScanState({ running: true, intervalMins: mins, startedAt: this.startedAt, lastScanTime: now });
         backgroundScan();
+      } else {
+        // 还没到下次扫描时间，计算剩余倒计时
+        this.countdown = intervalSec - sinceLast;
+        console.log(`[AutoScan] 恢复自动扫描，距下次扫描还有 ${this.countdown} 秒`);
       }
     } else {
       this.countdown = this.totalSec;
@@ -521,7 +528,7 @@ const _globalAutoScan = {
         this.countdown = this.totalSec;
         this.lastScanTime = Date.now();
         console.log('[AutoScan] 倒计时归零，触发扫描!', new Date().toLocaleTimeString());
-        _saveAagsScanState({ running: true, intervalMins: mins, startedAt: this.startedAt });
+        _saveAagsScanState({ running: true, intervalMins: mins, startedAt: this.startedAt, lastScanTime: Date.now() });
         backgroundScan();
       }
       this.notify();
@@ -533,17 +540,17 @@ const _globalAutoScan = {
     this.stop();
     this.startedAt = Date.now();
     this.lastScanTime = Date.now();
-    _saveAagsScanState({ running: true, intervalMins: mins, startedAt: this.startedAt });
+    _saveAagsScanState({ running: true, intervalMins: mins, startedAt: this.startedAt, lastScanTime: this.lastScanTime });
     this._startTimers(mins, true);
   },
 };
 
-// 模块加载时自动从 sessionStorage 恢复定时器 (SPA 内刷新页面时)
+// 模块加载时自动从 localStorage 恢复定时器 (关闭浏览器再打开也能恢复)
 (function _autoRestore() {
   const saved = _loadAagsScanState();
   if (saved?.running && saved.intervalMins > 0) {
     _globalAutoScan.startedAt = saved.startedAt;
-    _globalAutoScan.lastScanTime = saved.startedAt;
+    _globalAutoScan.lastScanTime = saved.lastScanTime || saved.startedAt;
     _globalAutoScan._startTimers(saved.intervalMins, false);
   }
 })();
