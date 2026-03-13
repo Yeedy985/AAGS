@@ -8,6 +8,7 @@
 import { decrypt } from './crypto';
 import type {
   LLMConfig, LLMProvider, LLMRole, SignalDefinition, SignalEvent, EventAlert, AlertLevel, SignalGroup,
+  TradeSuggestion,
 } from '../types';
 import { db } from '../db';
 import { SIGNAL_GROUPS } from './sentinelEngine';
@@ -127,6 +128,7 @@ ${signalList}
 3. 对每个被触发的信号，给出实际的 impact 值（正数=利多, 负数=利空），取值范围参考原始权重
 4. 置信度必须基于数据可靠性: 有确凿数据=1.0, 有可靠新闻=0.8, 合理推断=0.5, 不确定=0.3
 5. 如发现致命风险信号（交易所暴雷、稳定币脱锚等），务必在 alerts 中标记 level:"critical"
+6. **交易建议**: 基于上方技术分析中提供的**支撑位和阻力位锚点**，给出具体的买卖建议。你**必须从锚点中选择**入场价/目标价/止损价，**禁止自己编造价格**
 
 ## 严格按以下 JSON 格式返回：
 
@@ -140,6 +142,19 @@ ${signalList}
       "title": "<事件标题，20字内>",
       "summary": "<事件摘要与市场影响分析，50-150字>",
       "source": "<信息来源>"
+    }
+  ],
+  "tradeSuggestions": [
+    {
+      "coin": "<交易对，如 BTCUSDT>",
+      "action": "BUY|SELL|HOLD",
+      "entryPrice": <入场价，必须来自上方技术分析的支撑位或阻力位>,
+      "targetPrice": <目标价，必须来自上方的锚点>,
+      "stopLoss": <止损价，必须来自上方的锚点>,
+      "confidence": <0-1 信心度，基于信号共振强度>,
+      "timeframe": "<建议持仓周期: 1h|4h|1d>",
+      "reasoning": "<50-100字，解释为什么选这个锚点入场，哪些信号支持>",
+      "anchorSource": "<入场价来自哪个锚点，如 EMA50+FIB_0.618>"
     }
   ],
   "alerts": [
@@ -159,7 +174,9 @@ ${signalList}
 
 ## 重要
 - 没有触发任何信号也是正常的，返回空数组
-- impact 正负号代表对加密市场的方向影响（正=利多，负=利空）`;
+- impact 正负号代表对加密市场的方向影响（正=利多，负=利空）
+- tradeSuggestions: 只在方向明确且有锚点支撑时给出，不确定就返回空数组或 action="HOLD"
+- **禁止编造价格**：entryPrice/targetPrice/stopLoss 必须来自技术分析部分提供的支撑位/阻力位/EMA值`;
 }
 
 // ==================== Dev Proxy URL 解析 ====================
@@ -351,13 +368,14 @@ export async function analyzeSignals(
 ): Promise<{
   events: SignalEvent[];
   alerts: EventAlert[];
+  tradeSuggestions: TradeSuggestion[];
   marketSummary: string;
   pipelineInfo: { hasSearcher: boolean; hasMarketData: boolean; searcherProvider?: string; analyzerProvider: string };
   tokenUsage: LLMUsage[];
 }> {
   const enabledSignals = signals.filter(s => s.enabled);
   if (enabledSignals.length === 0) {
-    return { events: [], alerts: [], marketSummary: '', pipelineInfo: { hasSearcher: false, hasMarketData: false, analyzerProvider: analyzerConfig.provider }, tokenUsage: [] };
+    return { events: [], alerts: [], tradeSuggestions: [], marketSummary: '', pipelineInfo: { hasSearcher: false, hasMarketData: false, analyzerProvider: analyzerConfig.provider }, tokenUsage: [] };
   }
 
   // 查找 searcher LLM
@@ -449,9 +467,33 @@ export async function analyzeSignals(
     createdAt: now,
   }));
 
+  // 解析交易建议 (LLM从锚点中选价格)
+  const tradeSuggestions: TradeSuggestion[] = (parsed.tradeSuggestions || []).map((s: any) => {
+    const action = (['BUY', 'SELL', 'HOLD', 'CLOSE'].includes(s.action) ? s.action : 'HOLD') as TradeSuggestion['action'];
+    return {
+      coin: s.coin || 'BTCUSDT',
+      action,
+      entryPrice: Number(s.entryPrice) || 0,
+      targetPrice: Number(s.targetPrice) || 0,
+      stopLoss: Number(s.stopLoss) || 0,
+      confidence: Math.max(0, Math.min(1, Number(s.confidence) || 0.5)),
+      timeframe: s.timeframe || '4h',
+      reasoning: s.reasoning || '',
+      anchorSource: s.anchorSource || '',
+    };
+  }).filter((s: TradeSuggestion) => s.action !== 'HOLD' && s.entryPrice > 0);
+
+  if (tradeSuggestions.length > 0) {
+    console.log(`[Pipeline] LLM 给出 ${tradeSuggestions.length} 条交易建议`);
+    for (const s of tradeSuggestions) {
+      console.log(`  ${s.action} ${s.coin} @ $${s.entryPrice} → $${s.targetPrice} | SL $${s.stopLoss} | 信心${(s.confidence * 100).toFixed(0)}% | ${s.anchorSource}`);
+    }
+  }
+
   return {
     events,
     alerts,
+    tradeSuggestions,
     marketSummary: parsed.marketSummary || '',
     pipelineInfo: {
       hasSearcher: !!searcherConfig,

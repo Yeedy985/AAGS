@@ -25,6 +25,7 @@ import type {
   SignalGroup, SignalDefinition, ScoringResult,
   GridAutoParams, LLMProvider, LLMRole, EventAlert,
   ScanMode, ScanBriefing, ReportMode, BriefingFormat,
+  TradeSuggestion,
 } from '../types';
 import type { PipelineProgress } from '../services/llmService';
 
@@ -377,7 +378,7 @@ async function backgroundScan() {
     if (signalDefs.length === 0) { console.warn('[AutoScan] 无启用的信号定义'); return; }
 
     console.log('[AutoScan] 自建模式, analyzer:', analyzer.provider, analyzer.model);
-    const { events, alerts, marketSummary: summary, pipelineInfo, tokenUsage } = await analyzeSignals(
+    const { events, alerts, tradeSuggestions: autoSuggestions, marketSummary: summary, pipelineInfo, tokenUsage } = await analyzeSignals(
       analyzer, signalDefs, () => {},
     );
     await saveSignalEvents(events, alerts);
@@ -387,7 +388,7 @@ async function backgroundScan() {
     result.tokenUsage = tokenUsage;
     result.scanMode = 'self-hosted';
     await db.scoringResults.add(result);
-    evaluateAfterScan(result).catch(e => console.warn('[AutoScan] 状态机评估失败:', e.message));
+    evaluateAfterScan(result, allEvents, autoSuggestions).catch(e => console.warn('[AutoScan] 状态机评估失败:', e.message));
 
     // 保存 ScanBriefing
     const briefing: ScanBriefing = {
@@ -1160,7 +1161,7 @@ function PipelineConfigPanel({ scanMode, onModeChange }: { scanMode: ScanMode; o
 }
 
 // ==================== 子组件: 评分仪表盘 ====================
-function ScoringDashboard({ scores, gridParams, marketSummary }: { scores: ScoringResult | null; gridParams: GridAutoParams | null; marketSummary: string }) {
+function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions }: { scores: ScoringResult | null; gridParams: GridAutoParams | null; marketSummary: string; tradeSuggestions: TradeSuggestion[] }) {
   const sdColor = (v: number) => v > 20 ? 'text-emerald-400' : v < -20 ? 'text-red-400' : 'text-yellow-400';
   const svColor = (v: number) => v > 70 ? 'text-red-400' : v > 30 ? 'text-yellow-400' : 'text-emerald-400';
   const srColor = (v: number) => v > 85 ? 'text-red-500 animate-pulse' : v > 60 ? 'text-red-400' : v > 30 ? 'text-yellow-400' : 'text-emerald-400';
@@ -1298,6 +1299,62 @@ function ScoringDashboard({ scores, gridParams, marketSummary }: { scores: Scori
                     <div className="h-full rounded-full bg-red-500" style={{ width: `${gridParams.sellRatio * 100}%` }} />
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* 交易建议卡片 (Phase 1.5) */}
+          {tradeSuggestions.length > 0 && (
+            <div className="p-4 rounded-xl bg-slate-800/30 border border-slate-700/30">
+              <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                <TrendingUp className="w-4 h-4 text-cyan-400" />
+                AI 交易建议
+                <span className="text-xs text-slate-500 font-normal">基于技术锚点 · 经风控校验</span>
+              </h4>
+              <div className="space-y-3">
+                {tradeSuggestions.map((s: TradeSuggestion, i: number) => {
+                  const isBuy = s.action === 'BUY';
+                  const reward = Math.abs(s.targetPrice - s.entryPrice);
+                  const risk = Math.abs(s.entryPrice - s.stopLoss);
+                  const rrRatio = risk > 0 ? (reward / risk).toFixed(1) : '-';
+                  const pnlPercent = s.entryPrice > 0 ? ((s.targetPrice - s.entryPrice) / s.entryPrice * 100) : 0;
+                  return (
+                    <div key={i} className={`p-3 rounded-lg border ${isBuy ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${isBuy ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                            {s.action}
+                          </span>
+                          <span className="text-sm font-semibold text-white">{s.coin}</span>
+                          <span className="text-xs text-slate-500">{s.timeframe}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400">信心 {(s.confidence * 100).toFixed(0)}%</span>
+                          <span className="text-xs text-slate-500">R:R {rrRatio}</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 mb-2">
+                        <div className="text-center p-1.5 rounded bg-slate-800/60">
+                          <p className="text-xs text-slate-500">入场</p>
+                          <p className="text-sm font-mono font-semibold text-white">${s.entryPrice.toLocaleString()}</p>
+                        </div>
+                        <div className="text-center p-1.5 rounded bg-slate-800/60">
+                          <p className="text-xs text-emerald-500">目标</p>
+                          <p className="text-sm font-mono font-semibold text-emerald-400">${s.targetPrice.toLocaleString()}</p>
+                          <p className="text-xs text-emerald-500/70">{pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%</p>
+                        </div>
+                        <div className="text-center p-1.5 rounded bg-slate-800/60">
+                          <p className="text-xs text-red-500">止损</p>
+                          <p className="text-sm font-mono font-semibold text-red-400">${s.stopLoss.toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed">{s.reasoning}</p>
+                      {s.anchorSource && (
+                        <p className="text-xs text-cyan-500/60 mt-1">📐 锚点: {s.anchorSource}</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1833,6 +1890,7 @@ export default function SentimentMonitor() {
   const [progress, setProgress] = useState<PipelineProgress | null>(null);
   const [pipelineResult, setPipelineResult] = useState<{ hasSearcher: boolean; hasMarketData: boolean; searcherProvider?: string; analyzerProvider: string } | null>(null);
   const [scanResult, setScanResult] = useState<{ success: boolean; signalCount: number; alertCount: number; elapsed: number } | null>(null);
+  const [latestSuggestions, setLatestSuggestions] = useState<TradeSuggestion[]>([]);
   const scanStartRef = useRef<number>(0);
 
   // 自动检测模式: 如果有启用的公共服务配置，默认切到公共服务模式
@@ -1904,7 +1962,7 @@ export default function SentimentMonitor() {
         return;
       }
 
-      const { events, alerts, marketSummary: summary, pipelineInfo, tokenUsage } = await analyzeSignals(
+      const { events, alerts, tradeSuggestions: manualSuggestions, marketSummary: summary, pipelineInfo, tokenUsage } = await analyzeSignals(
         analyzer,
         signalDefs,
         (p) => setProgress(p),
@@ -1913,6 +1971,7 @@ export default function SentimentMonitor() {
       setMarketSummary(summary);
       setNewAlerts(alerts);
       setPipelineResult(pipelineInfo);
+      if (manualSuggestions.length > 0) setLatestSuggestions(manualSuggestions);
 
       // 重算评分
       const allEvents = await db.signalEvents.toArray();
@@ -1924,7 +1983,7 @@ export default function SentimentMonitor() {
       result.tokenUsage = tokenUsage;
       result.scanMode = 'self-hosted';
       await db.scoringResults.add(result);
-      evaluateAfterScan(result).catch(e => console.warn('[手动扫描] 状态机评估失败:', e.message));
+      evaluateAfterScan(result, allEvents, manualSuggestions).catch(e => console.warn('[手动扫描] 状态机评估失败:', e.message));
 
       // 保存 ScanBriefing 以持久化 marketSummary
       const briefing: ScanBriefing = {
@@ -2151,7 +2210,7 @@ export default function SentimentMonitor() {
       )}
 
       {/* 评分仪表盘 + 网格调参 */}
-      <ScoringDashboard scores={scores} gridParams={gridParams} marketSummary={marketSummary} />
+      <ScoringDashboard scores={scores} gridParams={gridParams} marketSummary={marketSummary} tradeSuggestions={latestSuggestions} />
 
       {/* 新预警 */}
       {newAlerts.length > 0 && (

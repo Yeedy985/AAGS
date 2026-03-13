@@ -8,7 +8,7 @@
  */
 
 import { db } from '../db';
-import type { ScoringResult, SignalEvent } from '../types';
+import type { ScoringResult, SignalEvent, TradeSuggestion } from '../types';
 import {
   evaluateContext,
   validateSuggestion,
@@ -25,11 +25,13 @@ const WATCHED_COINS = ['BTCUSDT'];
  * 
  * @param scores 最新评分结果
  * @param activeEvents 当前活跃信号
+ * @param tradeSuggestions LLM 给出的交易建议 (Phase 1.5)
  * @returns 状态变化摘要 (可用于通知)
  */
 export async function evaluateAfterScan(
   scores: ScoringResult,
   activeEvents?: SignalEvent[],
+  tradeSuggestions?: TradeSuggestion[],
 ): Promise<{ summaries: string[]; hasChanges: boolean }> {
   const summaries: string[] = [];
   let hasChanges = false;
@@ -50,12 +52,25 @@ export async function evaluateAfterScan(
         // 价格获取失败不阻断状态机
       }
 
+      // 查找该币种的 LLM 建议，并通过风控校验
+      let validSuggestion: TradeSuggestion | undefined;
+      if (tradeSuggestions && currentPrice > 0) {
+        const coinSuggestion = tradeSuggestions.find(s => s.coin === coin || s.coin === coin.replace('USDT', ''));
+        if (coinSuggestion) {
+          const validated = validateSuggestion(coinSuggestion, currentPrice, scores);
+          if (validated) {
+            validSuggestion = validated;
+            console.log(`[TradeContext] ${coin} LLM建议通过风控: ${validated.action} @ $${validated.entryPrice}`);
+          }
+        }
+      }
+
       const { ctx, changed, shouldNotify } = await evaluateContext(
         coin,
         activeEvents,
         scores,
         currentPrice,
-        undefined, // Phase 1.5 才有 LLM tradeSuggestion
+        validSuggestion,
       );
 
       if (changed) {
