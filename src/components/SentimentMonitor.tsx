@@ -330,20 +330,22 @@ async function backgroundScan() {
       console.log('[AutoScan] 公共服务模式:', config.serverUrl);
       const { briefingId, estimatedSeconds } = await requestScan(config);
       console.log('[AutoScan] 请求已发送, briefingId:', briefingId, '预计:', estimatedSeconds, 's');
-      const maxWait = Math.max(60, (estimatedSeconds || 30) * 2) * 1000;
+      const maxWait = Math.max(120, (estimatedSeconds || 60) * 3) * 1000;
       const start = Date.now();
       let briefing: ScanBriefing | null = null;
       while (Date.now() - start < maxWait) {
         if (_bgAborted) { console.log('[AutoScan] 扫描被用户中止'); _bgScanning = false; return; }
         await new Promise(r => setTimeout(r, 3000));
         if (_bgAborted) { console.log('[AutoScan] 扫描被用户中止'); _bgScanning = false; return; }
-        const briefings = await fetchLatestBriefings(config, 1);
-        if (briefings.length > 0 && briefings[0].briefingId === briefingId) {
-          briefing = briefings[0];
-          break;
+        try {
+          const briefings = await fetchLatestBriefings(config, 5);
+          const match = briefings.find(b => b.briefingId === briefingId);
+          if (match) { briefing = match; break; }
+        } catch (e: any) {
+          console.warn('[AutoScan] 轮询失败，继续等待:', e.message);
         }
       }
-      if (!briefing) { console.warn('[AutoScan] 扫描超时'); return; }
+      if (!briefing) { console.warn(`[AutoScan] 扫描超时 (等待${Math.round(maxWait/1000)}s)`); return; }
       const scanTimestamp = briefing.completedAt ? new Date(briefing.completedAt).getTime() : briefing.timestamp;
       await saveBriefing(briefing, scanTimestamp);
       if (config.notifyEnabled && briefing.alerts.length > 0) {
@@ -2055,22 +2057,29 @@ export default function SentimentMonitor() {
 
       setProgress({ step: 1, totalSteps: 2, label: '⏳ 等待扫描结果', detail: `预计 ${estimatedSeconds}s (${briefingId.slice(0, 8)}...)` });
 
-      // 轮询等待结果 (最多等待 estimatedSeconds * 2)
-      const maxWait = Math.max(60, (estimatedSeconds || 30) * 2) * 1000;
+      // 轮询等待结果 (最多等待 estimatedSeconds * 3，最少 120s)
+      const maxWait = Math.max(120, (estimatedSeconds || 60) * 3) * 1000;
       const start = Date.now();
       let briefing: ScanBriefing | null = null;
 
       while (Date.now() - start < maxWait) {
         await new Promise(r => setTimeout(r, 3000));
-        const briefings = await fetchLatestBriefings(config, 1);
-        if (briefings.length > 0 && briefings[0].briefingId === briefingId) {
-          briefing = briefings[0];
-          break;
+        const elapsed = Math.round((Date.now() - start) / 1000);
+        setProgress({ step: 1, totalSteps: 2, label: '⏳ 等待扫描结果', detail: `已等待 ${elapsed}s / 预计 ${estimatedSeconds}s (${briefingId.slice(0, 8)}...)` });
+        try {
+          const briefings = await fetchLatestBriefings(config, 5);
+          const match = briefings.find(b => b.briefingId === briefingId);
+          if (match) {
+            briefing = match;
+            break;
+          }
+        } catch (e: any) {
+          console.warn('[PublicScan] 轮询失败，继续等待:', e.message);
         }
       }
 
       if (!briefing) {
-        setError('扫描超时，简报可能稍后通过 SSE 推送到达');
+        setError(`扫描超时 (等待${Math.round(maxWait/1000)}s)，简报可能稍后通过 SSE 推送到达`);
         analyzingRef.current = false;
         setAnalyzing(false);
         setProgress(null);
