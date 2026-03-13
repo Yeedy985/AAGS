@@ -56,6 +56,7 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<{
   if (!cfg) throw new Error('未配置公共服务，请先在舆情监控页面配置 AlphaSentinel 服务');
 
   const url = `${cfg.serverUrl}${path}`;
+  console.log('[Plaza API]', options.method || 'GET', url);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${cfg.authToken}`,
@@ -63,7 +64,13 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<{
   };
 
   const res = await fetch(url, { ...options, headers });
-  return res.json();
+  const text = await res.text();
+  console.log('[Plaza API] Response', res.status, text.slice(0, 300));
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`服务器返回非 JSON 响应 (${res.status}): ${text.slice(0, 300)}`);
+  }
 }
 
 // 公开请求 (无需 auth)
@@ -74,7 +81,12 @@ async function publicRequest<T>(path: string, options: RequestInit = {}): Promis
   const url = `${serverUrl.replace(/\/$/, '')}${path}`;
 
   const res = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers as Record<string, string> || {}) } });
-  return res.json();
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`服务器返回非 JSON 响应 (${res.status}): ${text.slice(0, 200)}`);
+  }
 }
 
 // ── 策略广场列表 (公开) ──
