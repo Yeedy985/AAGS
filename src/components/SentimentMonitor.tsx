@@ -14,7 +14,7 @@ import {
   LLM_PROVIDERS, analyzeSignals, saveSignalEvents,
 } from '../services/llmService';
 import {
-  SIGNAL_GROUPS, SIGNAL_MATRIX, SentinelScoringEngine,
+  SIGNAL_MATRIX, SentinelScoringEngine, getLocalizedSignalGroups,
 } from '../services/sentinelEngine';
 import {
   checkServiceStatus, requestScan, fetchLatestBriefings,
@@ -1430,7 +1430,7 @@ function ScoringDashboard({ scores, gridParams, marketSummary, marketSummaryEn, 
 
 // ==================== 子组件: 信号矩阵管理 ====================
 function SignalMatrixPanel({ onScan, analyzing, progress }: { onScan: () => void; analyzing: boolean; progress: PipelineProgress | null }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const signalDefs = useLiveQuery(() => db.signalDefinitions.orderBy('signalId').toArray(), []);
   const llmConfigs = useLiveQuery(() => db.llmConfigs.filter(c => c.enabled).toArray(), []);
   const [expandedGroup, setExpandedGroup] = useState<SignalGroup | null>(null);
@@ -1541,7 +1541,7 @@ function SignalMatrixPanel({ onScan, analyzing, progress }: { onScan: () => void
 
       {/* 按组展示 */}
       <div className="space-y-2">
-        {SIGNAL_GROUPS.map((groupCfg) => {
+        {getLocalizedSignalGroups(i18n.language === 'zh' ? 'zh' : 'en').map((groupCfg) => {
           const items = filteredDefs.filter(s => s.group === groupCfg.id);
           if (searchText && items.length === 0) return null;
           const allItems = signalDefs?.filter(s => s.group === groupCfg.id) || [];
@@ -1711,7 +1711,8 @@ function SignalEventHistory() {
     );
   }
 
-  const groupLabel = (g: string) => SIGNAL_GROUPS.find(gr => gr.id === g);
+  const localizedGroups = getLocalizedSignalGroups(isEn ? 'en' : 'zh');
+  const groupLabel = (g: string) => localizedGroups.find(gr => gr.id === g);
 
   const hasFailures = scanFailures && scanFailures.length > 0;
 

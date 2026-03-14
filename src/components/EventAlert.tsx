@@ -9,7 +9,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { encrypt, decrypt } from '../services/crypto';
 import { notifyAlert, getGlobalPushSettings, saveGlobalPushSettings, testScanResultPush, diagnosticTest } from '../services/notificationService';
 import type { GlobalPushSettings } from '../services/notificationService';
-import { SIGNAL_GROUPS } from '../services/sentinelEngine';
+import { getLocalizedSignalGroups } from '../services/sentinelEngine';
 import type { NotificationConfig, AlertLevel, EventAlert as EventAlertType } from '../types';
 
 // ==================== 子组件: 通知渠道配置 ====================
@@ -495,7 +495,7 @@ export default function EventAlertPage() {
         ) : (
           <div className="space-y-2">
             {unacknowledged.map((alert) => {
-              const grp = SIGNAL_GROUPS.find(g => g.id === alert.group);
+              const grp = getLocalizedSignalGroups(isEn ? 'en' : 'zh').find(g => g.id === alert.group);
               return (
                 <div key={alert.id} className={`p-4 rounded-xl border-l-4 ${levelBorder(alert.level)} space-y-2`} style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.6) 0%, rgba(30,41,59,0.3) 100%)', boxShadow: '0 2px 8px -2px rgba(0,0,0,0.15)' }}>
                   <div className="flex items-start justify-between">
@@ -567,7 +567,7 @@ export default function EventAlertPage() {
             </summary>
             <div className="space-y-2 mt-4">
               {acknowledged.map((alert) => {
-                const grp = SIGNAL_GROUPS.find(g => g.id === alert.group);
+                const grp = getLocalizedSignalGroups(isEn ? 'en' : 'zh').find(g => g.id === alert.group);
                 return (
                   <div key={alert.id} className="p-3 rounded-xl opacity-60" style={{ background: 'rgba(15,23,42,0.3)', border: '1px solid rgba(51,65,85,0.2)' }}>
                     <div className="flex items-center gap-2">

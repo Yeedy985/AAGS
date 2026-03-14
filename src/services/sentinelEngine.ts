@@ -31,8 +31,8 @@ function _getLang(): 'zh' | 'en' {
   return 'en';
 }
 
-function buildSignalGroups(): SignalGroupConfig[] {
-  const lang = _getLang();
+function buildSignalGroups(langOverride?: 'zh' | 'en'): SignalGroupConfig[] {
+  const lang = langOverride || _getLang();
   const bases: { id: SignalGroup; icon: string; range: [number, number] }[] = [
     { id: 'G1',  icon: '💰', range: [1, 30] },
     { id: 'G2',  icon: '🏦', range: [31, 65] },
@@ -53,8 +53,8 @@ function buildSignalGroups(): SignalGroupConfig[] {
 
 export const SIGNAL_GROUPS: SignalGroupConfig[] = buildSignalGroups();
 
-export function getLocalizedSignalGroups(): SignalGroupConfig[] {
-  return buildSignalGroups();
+export function getLocalizedSignalGroups(lang?: 'zh' | 'en'): SignalGroupConfig[] {
+  return buildSignalGroups(lang);
 }
 
 // ==================== 300条信号字典 ====================

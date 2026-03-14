@@ -666,7 +666,11 @@ export interface EventAlert {
 
   title: string;
 
+  titleEn?: string;
+
   description: string;
+
+  descriptionEn?: string;
 
   level: AlertLevel;
 
