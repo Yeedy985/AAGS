@@ -8,6 +8,7 @@ import { db } from '../db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { Strategy, GridLayerConfig, RiskConfig, RangeMode, ProfitAllocation, EndMode, ApiConfig, AssetBalance } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   onCreated: (strategy: Strategy) => void;
@@ -39,6 +40,7 @@ const defaultLayers: GridLayerConfig[] = [
 export default function StrategyCreator({ onCreated, onCancel }: Props) {
   const { symbols, setSymbols, apiConfig } = useStore();
   const isMobile = useIsMobile();
+  const { t } = useTranslation();
   const savedConfigs = useLiveQuery(() => db.apiConfigs.toArray(), []);
   const [selectedAccount, setSelectedAccount] = useState<ApiConfig | null>(null);
 
@@ -78,7 +80,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
       setLocalTotalUsdt(total);
       setConnectionOk(true);
     } catch (err: any) {
-      setConnectionError(err.message || '连接失败');
+      setConnectionError(err.message || t('connection.connectionFailed'));
     }
     setChecking(false);
   }, []);
@@ -179,7 +181,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
         setLowerPrice(parseFloat(range.lower.toFixed(2)));
         updateLayerPrices(range.lower, range.upper);
       }
-      if (!name) setName(`${sym.replace('USDT', '')} 网格策略`);
+      if (!name) setName(t('creator.defaultStrategyName', { symbol: sym.replace('USDT', '') }));
     } catch (err) {
       console.error(err);
     }
@@ -253,12 +255,12 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
     onCreated(strategy);
   };
 
-  const layerNames: Record<string, string> = { trend: '趋势核心层', swing: '震荡波动层', spike: '插针收割层' };
+  const layerNames: Record<string, string> = { trend: t('strategy.layerFull.trend'), swing: t('strategy.layerFull.swing'), spike: t('strategy.layerFull.spike') };
   const layerColors: Record<string, string> = { trend: 'border-blue-500', swing: 'border-emerald-500', spike: 'border-orange-500' };
   const layerDescriptions: Record<string, string> = {
-    trend: '趋势核心层：使用较少的网格数和较大的利润率，捕捉大趋势中的波动。适合币价在明确趋势中运行的场景，网格间距大，单笔利润高，交易频率低。',
-    swing: '震荡波动层：使用较多的网格数和适中的利润率，捕捉日常震荡中的频繁波动。是主要的利润来源，网格间距适中，交易频率高，资金利用率最佳。',
-    spike: '插针收割层：利用极端价格波动（插针）进行低买高卖。网格区间最宽，利润率最高，触发频率低但单笔收益极高，专门收割市场恐慌和贪婪时刻。',
+    trend: t('strategy.layerDesc.trend'),
+    swing: t('strategy.layerDesc.swing'),
+    spike: t('strategy.layerDesc.spike'),
   };
   const [expandedLayerInfo, setExpandedLayerInfo] = useState<string | null>(null);
 
@@ -268,8 +270,8 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
         {/* Header */}
         <div className={`flex items-center justify-between ${isMobile ? 'px-4 py-3' : 'p-6'} sticky top-0 z-10`} style={{ borderBottom: '1px solid rgba(51,65,85,0.3)', background: 'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(10,15,30,0.96) 100%)', backdropFilter: 'blur(12px)' }}>
           <div>
-            <h2 className={`${isMobile ? 'text-base' : 'text-xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>新建策略</h2>
-            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-0.5 font-medium`}>步骤 {step} / 5</p>
+            <h2 className={`${isMobile ? 'text-base' : 'text-xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>{t('creator.title')}</h2>
+            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-0.5 font-medium`}>{t('creator.step', { current: step, total: 5 })}</p>
           </div>
           <button onClick={onCancel} className="p-2 rounded-xl text-slate-500 hover:text-slate-300 hover:bg-white/[0.04] transition-all">
             <X className={isMobile ? 'w-4 h-4' : 'w-5 h-5'} />
@@ -283,7 +285,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
               <div className={`flex items-center justify-between ${isMobile ? 'mb-2' : 'mb-3'}`}>
                 <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-400 flex items-center gap-1.5`}>
                   <Wallet className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
-                  {selectedAccount && getExchangeConfig(selectedAccount.exchange || 'binance').logo} {isMobile ? '' : selectedAccount?.label} 资产
+                  {selectedAccount && getExchangeConfig(selectedAccount.exchange || 'binance').logo} {isMobile ? '' : selectedAccount?.label} {t('creator.assets')}
                 </span>
                 <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-bold text-blue-400`}>
                   ${localTotalUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -304,7 +306,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                 ))}
                 {localBalances.length > (isMobile ? 6 : 12) && (
                   <div className={`flex items-center ${isMobile ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} rounded-lg bg-slate-900/60 text-slate-500`}>
-                    +{localBalances.length - (isMobile ? 6 : 12)} 更多
+                    {t('creator.moreAssets', { count: localBalances.length - (isMobile ? 6 : 12) })}
                   </div>
                 )}
               </div>
@@ -328,14 +330,14 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
           {step === 1 && (
             <>
               <div>
-                <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>选择交易所账户</label>
+                <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>{t('creator.selectAccount')}</label>
                 <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-3`}>
-                  {isMobile ? '选择用于运行此策略的账户' : '选择用于运行此策略的交易所账户。策略将使用该账户的 API Key 进行交易。'}
+                  {isMobile ? t('creator.selectAccountDescMobile') : t('creator.selectAccountDesc')}
                 </p>
                 {(!savedConfigs || savedConfigs.length === 0) ? (
                   <div className={`${isMobile ? 'p-4' : 'p-6'} rounded-xl border border-dashed border-slate-700 text-center space-y-2`}>
-                    <p className={`text-slate-500 ${isMobile ? 'text-sm' : ''}`}>尚未配置任何交易所账户</p>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>请先前往「账户管理」添加 API Key</p>
+                    <p className={`text-slate-500 ${isMobile ? 'text-sm' : ''}`}>{t('creator.noAccountConfigured')}</p>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>{t('creator.goToAccountManager')}</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -369,7 +371,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                           </div>
                           <div className="flex items-center gap-2">
                             {isSelected && (
-                              <span className={`${isMobile ? 'text-xs px-1.5' : 'text-sm px-2'} py-0.5 rounded-full bg-blue-600/20 text-blue-400 border border-blue-500/30`}>已选</span>
+                              <span className={`${isMobile ? 'text-xs px-1.5' : 'text-sm px-2'} py-0.5 rounded-full bg-blue-600/20 text-blue-400 border border-blue-500/30`}>{t('common.selected')}</span>
                             )}
                           </div>
                         </button>
@@ -388,7 +390,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                   {checking ? (
                     <div className={`flex items-center gap-2 ${isMobile ? 'text-xs' : 'text-sm'} text-blue-400`}>
                       <Loader2 className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} animate-spin`} />
-                      正在连接并验证 API ...
+                      {t('connection.verifyingApi')}
                     </div>
                   ) : connectionOk ? (
                     <div className={isMobile ? 'space-y-2' : 'space-y-3'}>
@@ -396,7 +398,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                         <div className={`flex items-center gap-2 ${isMobile ? 'text-xs' : 'text-sm'} text-emerald-400`}>
                           <CheckCircle className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
                           <span className="font-medium">
-                            {getExchangeConfig(selectedAccount.exchange || 'binance').logo} {isMobile ? '连接成功' : `${selectedAccount.label} 连接成功`}
+                            {getExchangeConfig(selectedAccount.exchange || 'binance').logo} {isMobile ? t('connection.connectionSuccess') : `${selectedAccount.label} ${t('connection.connectionSuccess')}`}
                           </span>
                         </div>
                         <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-bold text-blue-400`}>
@@ -413,7 +415,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                             </div>
                           ))}
                           {localBalances.length > (isMobile ? 6 : 10) && (
-                            <span className={`flex items-center ${isMobile ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm'} rounded-lg bg-slate-900/60 text-slate-500`}>+{localBalances.length - (isMobile ? 6 : 10)} 更多</span>
+                            <span className={`flex items-center ${isMobile ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm'} rounded-lg bg-slate-900/60 text-slate-500`}>{t('creator.moreAssets', { count: localBalances.length - (isMobile ? 6 : 10) })}</span>
                           )}
                         </div>
                       )}
@@ -422,19 +424,19 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-sm text-red-400">
                         <AlertCircle className="w-4 h-4" />
-                        <span className="font-medium">连接失败</span>
+                        <span className="font-medium">{t('connection.connectionFailed')}</span>
                       </div>
                       <p className="text-sm text-red-400/80">{connectionError}</p>
                       <button
                         className="text-sm text-blue-400 hover:text-blue-300"
                         onClick={() => handleCheckConnection(selectedAccount)}
                       >
-                        重试连接
+                        {t('connection.retryConnection')}
                       </button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 text-sm text-slate-400">
-                      <span>选择账户后将自动检测连接</span>
+                      <span>{t('connection.autoDetect')}</span>
                     </div>
                   )}
                 </div>
@@ -446,13 +448,13 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
           {step === 2 && (
             <>
               <div ref={dropdownRef}>
-                <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>交易对</label>
+                <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>{t('creator.tradingPair')}</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                   <input
                     ref={inputRef}
                     className={`input-field pl-10 pr-16 ${symbol ? 'text-transparent' : ''}`}
-                    placeholder={symbol ? '' : '点击选择或输入币种，如 BTC、ETH'}
+                    placeholder={symbol ? '' : t('creator.searchPlaceholder')}
                     value={symbol ? '' : symbolSearch}
                     onChange={(e) => { setSymbolSearch(e.target.value); setShowDropdown(true); }}
                     onFocus={() => { if (symbol) { handleClearSymbol(); } setShowDropdown(true); }}
@@ -468,7 +470,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                       <button
                         className="p-1 rounded text-slate-500 hover:text-slate-300 transition-colors"
                         onClick={(e) => { e.stopPropagation(); handleClearSymbol(); setShowDropdown(true); }}
-                        title="清除"
+                        title={t('common.delete')}
                       >
                         <XCircle className="w-4 h-4" />
                       </button>
@@ -484,7 +486,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                 {showDropdown && (
                   <div className="mt-1 rounded-xl max-h-60 overflow-y-auto" style={{ background: 'rgba(15,23,42,0.95)', border: '1px solid rgba(51,65,85,0.4)', boxShadow: '0 12px 40px -8px rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)' }}>
                     {!symbolSearch.trim() && !symbol && (
-                      <div className="px-3 py-1.5 text-sm text-slate-500 border-b border-slate-700">热门交易对</div>
+                      <div className="px-3 py-1.5 text-sm text-slate-500 border-b border-slate-700">{t('creator.popularPairs')}</div>
                     )}
                     {filteredSymbols.length > 0 ? filteredSymbols.map((s) => (
                       <button
@@ -498,19 +500,19 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                           <span className="font-medium">{s.baseAsset}</span>
                           <span className="text-slate-500">/USDT</span>
                         </div>
-                        {symbol === s.symbol && <span className="text-sm text-blue-400">已选</span>}
+                        {symbol === s.symbol && <span className="text-sm text-blue-400">{t('common.selected')}</span>}
                       </button>
                     )) : (
-                      <div className="px-3 py-4 text-sm text-slate-500 text-center">未找到匹配的交易对</div>
+                      <div className="px-3 py-4 text-sm text-slate-500 text-center">{t('creator.noMatchPairs')}</div>
                     )}
                   </div>
                 )}
                 {symbol && currentPrice > 0 && (
                   <div className={`mt-2 flex ${isMobile ? 'flex-col gap-1' : 'items-center gap-4'} ${isMobile ? 'text-xs' : 'text-sm'}`}>
-                    <span className="text-slate-400">当前价格: <span className="text-white font-mono">${currentPrice.toLocaleString()}</span></span>
+                    <span className="text-slate-400">{t('creator.currentPrice')}: <span className="text-white font-mono">${currentPrice.toLocaleString()}</span></span>
                     <span className="text-slate-400">
-                      波动率: <span className={volatility.level === '低' ? 'text-emerald-400' : volatility.level === '中' ? 'text-yellow-400' : 'text-red-400'}>
-                        {volatility.level} ({volatility.percent.toFixed(2)}%)
+                      {t('creator.volatility')}: <span className={volatility.percent < 2 ? 'text-emerald-400' : volatility.percent < 5 ? 'text-yellow-400' : 'text-red-400'}>
+                        {volatility.percent < 2 ? t('creator.volatilityLow') : volatility.percent < 5 ? t('creator.volatilityMid') : t('creator.volatilityHigh')} ({volatility.percent.toFixed(2)}%)
                       </span>
                     </span>
                   </div>
@@ -519,11 +521,11 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
 
               <div className={`grid ${isMobile ? 'grid-cols-1 gap-3' : 'grid-cols-2 gap-4'}`}>
                 <div>
-                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-1.5`}>策略名称</label>
-                  <input className="input-field" value={name} onChange={(e) => setName(e.target.value)} placeholder="我的网格策略" />
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-1.5`}>{t('creator.strategyName')}</label>
+                  <input className="input-field" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('creator.strategyNamePlaceholder')} />
                 </div>
                 <div>
-                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-1.5`}>投入资金 (USDT)</label>
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-1.5`}>{t('creator.investmentFund')}</label>
                   <input className="input-field" type="number" value={totalFund} onChange={(e) => setTotalFund(Number(e.target.value))} />
                 </div>
               </div>
@@ -535,34 +537,34 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
             <>
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300`}>开仓价</label>
-                  <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? '达到即触发策略' : '开仓价格达到即触发此策略'}</span>
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300`}>{t('creator.entryPrice')}</label>
+                  <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? t('creator.entryPriceTrigger') : t('creator.entryPriceTriggerFull')}</span>
                 </div>
                 <input
                   className="input-field"
                   type="number"
                   step="0.01"
-                  placeholder="输入开仓价格"
+                  placeholder={t('creator.entryPricePlaceholder')}
                   value={entryPrice || ''}
                   onChange={(e) => setEntryPrice(Number(e.target.value))}
                 />
                 {currentPrice > 0 && entryPrice !== currentPrice && (
                   <p className="text-sm text-slate-500 mt-1">
-                    当前市场价: <span className="text-slate-400 font-mono">${currentPrice.toLocaleString()}</span>
+                    {t('creator.currentMarketPrice')}: <span className="text-slate-400 font-mono">${currentPrice.toLocaleString()}</span>
                     <button
                       className="ml-2 text-blue-400 hover:text-blue-300"
                       onClick={() => setEntryPrice(currentPrice)}
                     >
-                      重置为市场价
+                      {t('creator.resetToMarketPrice')}
                     </button>
                   </p>
                 )}
               </div>
 
               <div>
-                <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>区间模式</label>
+                <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>{t('creator.rangeMode')}</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {([['fixed', '固定数值'], ['percentage', '百分比']] as const).map(([key, label]) => (
+                  {([['fixed', t('creator.rangeModeFixed')], ['percentage', t('creator.rangeModePercentage')]] as const).map(([key, label]) => (
                     <button
                       key={key}
                       className={`p-3 rounded-lg border text-sm transition-colors ${
@@ -578,7 +580,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300`}>价格区间</label>
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300`}>{t('creator.priceRange')}</label>
                   {upperPrice > 0 && lowerPrice > 0 ? (
                     <button
                       className="flex items-center gap-1.5 text-sm text-red-400 hover:text-red-300 transition-colors"
@@ -589,7 +591,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                       }}
                     >
                       <Eraser className="w-3.5 h-3.5" />
-                      全部清除
+                      {t('creator.clearAll')}
                     </button>
                   ) : (
                     <button
@@ -610,7 +612,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                       }}
                     >
                       <Wand2 className="w-3.5 h-3.5" />
-                      自动填充
+                      {t('creator.autoFill')}
                     </button>
                   )}
                 </div>
@@ -620,7 +622,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                       className={`input-field ${rangeMode === 'percentage' ? 'pr-8' : ''}`}
                       type="number"
                       step="0.01"
-                      placeholder="最高"
+                      placeholder={t('creator.highest')}
                       value={upperPrice || ''}
                       onChange={(e) => { const v = Number(e.target.value); setUpperPrice(v); updateLayerPrices(lowerPrice, v); }}
                     />
@@ -633,7 +635,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                       className={`input-field ${rangeMode === 'percentage' ? 'pr-8' : ''}`}
                       type="number"
                       step="0.01"
-                      placeholder="最低"
+                      placeholder={t('creator.lowest')}
                       value={lowerPrice || ''}
                       onChange={(e) => { const v = Number(e.target.value); setLowerPrice(v); updateLayerPrices(v, upperPrice); }}
                     />
@@ -647,9 +649,9 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
               {upperPrice > 0 && lowerPrice > 0 && (
                 <div className={`${isMobile ? 'p-2' : 'p-3'} rounded-lg bg-slate-800/50 ${isMobile ? 'text-xs' : 'text-sm'}`}>
                   <p className="text-slate-400">
-                    区间宽度: <span className="text-white">{((upperPrice - lowerPrice) / currentPrice * 100).toFixed(1)}%</span>
+                    {t('creator.rangeWidth')}: <span className="text-white">{((upperPrice - lowerPrice) / currentPrice * 100).toFixed(1)}%</span>
                     <span className="mx-2">|</span>
-                    中间价: <span className="text-white">${((upperPrice + lowerPrice) / 2).toFixed(2)}</span>
+                    {t('creator.midPrice')}: <span className="text-white">${((upperPrice + lowerPrice) / 2).toFixed(2)}</span>
                   </p>
                 </div>
               )}
@@ -659,7 +661,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
           {/* Step 4: Grid Layers */}
           {step === 4 && (
             <>
-              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? '配置三层网格参数' : '配置三层网格的参数。每层有独立的网格数、区间和利润率。'}</p>
+              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? t('creator.configLayers') : t('creator.configLayersFull')}</p>
               {layers.map((layer, i) => (
                 <div key={layer.layer} className={`rounded-xl border-l-4 ${layerColors[layer.layer]} transition-all duration-200 ${layer.enabled ? (isMobile ? 'p-3 space-y-2.5' : 'p-4 space-y-3') : (isMobile ? 'px-3 py-2.5' : 'px-4 py-3')}`} style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.6) 0%, rgba(30,41,59,0.3) 100%)', boxShadow: '0 2px 8px -2px rgba(0,0,0,0.15)' }}>
                   <div className="flex items-center justify-between">
@@ -672,16 +674,16 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                         <button
                           className="p-0.5 text-slate-500 hover:text-blue-400 transition-colors"
                           onClick={() => setExpandedLayerInfo(expandedLayerInfo === layer.layer ? null : layer.layer)}
-                          title="查看说明"
+                          title={t('creator.viewDescription')}
                         >
                           <HelpCircle className="w-4 h-4" />
                         </button>
                       )}
                     </div>
                     {layer.enabled ? (
-                      <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>资金 {Math.round(layer.fundRatio * 100)}%</span>
+                      <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('creator.fund')} {Math.round(layer.fundRatio * 100)}%</span>
                     ) : (
-                      <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>{isMobile ? '未启用' : '未启用 — 勾选以配置'}</span>
+                      <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>{isMobile ? t('creator.notEnabled') : t('creator.notEnabledFull')}</span>
                     )}
                   </div>
 
@@ -696,11 +698,11 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                       {/* Row 1: Grid count, fund ratio */}
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>网格数量</label>
+                          <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('creator.gridCountLabel')}</label>
                           <input className="input-field text-sm mt-1" type="number" value={layer.gridCount} onChange={(e) => updateLayer(i, { gridCount: Number(e.target.value) })} />
                         </div>
                         <div className="relative">
-                          <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>资金比例%</label>
+                          <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('creator.fundRatio')}</label>
                           <input
                             className="input-field text-sm mt-1 pr-8"
                             type="number"
@@ -720,16 +722,16 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                       {/* Row 2: Layer price range with ratio */}
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>本层价格区间</label>
+                          <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('creator.layerPriceRange')}</label>
                           <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>
                             {entryPrice > 0 && upperPrice > 0 && lowerPrice > 0
-                              ? `以开仓区间为基数的 ${Math.round(layer.rangeRatio * 100)}%`
-                              : '请先在步骤3设置开仓区间'}
+                              ? t('creator.basedOnEntryRange', { ratio: Math.round(layer.rangeRatio * 100) })
+                              : t('creator.setEntryRangeFirst')}
                           </span>
                         </div>
                         {/* Range ratio slider */}
                         <div className="flex items-center gap-2 mb-2">
-                          <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 whitespace-nowrap`}>区间比例</label>
+                          <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 whitespace-nowrap`}>{t('creator.rangeRatio')}</label>
                           <input
                             type="range"
                             className="flex-1 h-1.5 accent-blue-500"
@@ -781,23 +783,23 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                         {/* Computed price display */}
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mb-0.5 block`}>上界价格</label>
+                            <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mb-0.5 block`}>{t('creator.upperBound')}</label>
                             <input
                               className="input-field text-sm"
                               type="number"
                               step="0.01"
-                              placeholder="上界价格"
+                              placeholder={t('creator.upperBound')}
                               value={layer.upperPrice || ''}
                               onChange={(e) => updateLayer(i, { upperPrice: Number(e.target.value) })}
                             />
                           </div>
                           <div>
-                            <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mb-0.5 block`}>下界价格</label>
+                            <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mb-0.5 block`}>{t('creator.lowerBound')}</label>
                             <input
                               className="input-field text-sm"
                               type="number"
                               step="0.01"
-                              placeholder="下界价格"
+                              placeholder={t('creator.lowerBound')}
                               value={layer.lowerPrice || ''}
                               onChange={(e) => updateLayer(i, { lowerPrice: Number(e.target.value) })}
                             />
@@ -805,22 +807,22 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                         </div>
                         {layer.upperPrice > 0 && layer.lowerPrice > 0 && layer.gridCount > 0 && (
                           <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mt-1`}>
-                            每格 ≈ ${((layer.upperPrice - layer.lowerPrice) / layer.gridCount).toFixed(4)}
+                            {t('creator.perGrid')} ≈ ${((layer.upperPrice - layer.lowerPrice) / layer.gridCount).toFixed(4)}
                             <span className="mx-2">|</span>
-                            宽度 {((layer.upperPrice - layer.lowerPrice) / entryPrice * 100).toFixed(1)}%
+                            {t('creator.width')} {((layer.upperPrice - layer.lowerPrice) / entryPrice * 100).toFixed(1)}%
                           </p>
                         )}
                       </div>
 
                       {/* Row 3: Profit mode selector */}
                       <div>
-                        <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 block mb-1`}>利润模式</label>
+                        <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 block mb-1`}>{t('creator.profitMode')}</label>
                         <div className={`grid ${isMobile ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'} gap-1.5`}>
                           {([
-                            ['fixed_rate', '固定利润率'],
-                            ['per_grid', '每格独立'],
-                            ['distance_increase', '距离递增'],
-                            ['trend_increase', '趋势模式'],
+                            ['fixed_rate', t('creator.profitModeFixed')],
+                            ['per_grid', t('creator.profitModePerGrid')],
+                            ['distance_increase', t('creator.profitModeDistance')],
+                            ['trend_increase', t('creator.profitModeTrend')],
                           ] as const).map(([key, label]) => (
                             <button
                               key={key}
@@ -845,14 +847,14 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                             : 0;
                           return (
                             <div>
-                              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-2`}>{isMobile ? '固定利润率，由区间÷网格数自动计算' : '每笔交易使用统一的固定利润率，由区间宽度 ÷ 网格数自动计算'}</p>
+                              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-2`}>{isMobile ? t('creator.fixedRateDescMobile') : t('creator.fixedRateDesc')}</p>
                               <div className={`relative ${isMobile ? 'w-full' : 'w-48'}`}>
-                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>每格利润率（自动）</label>
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('creator.autoRate')}</label>
                                 <input
                                   className="input-field text-sm mt-1 pr-8 bg-slate-800/60 text-slate-300 cursor-not-allowed"
                                   type="text"
                                   readOnly
-                                  value={autoRate > 0 ? autoRate : '请先设置价格区间'}
+                                  value={autoRate > 0 ? autoRate : t('creator.setPriceRangeFirst')}
                                 />
                                 {autoRate > 0 && <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>}
                               </div>
@@ -862,10 +864,10 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
 
                         {layer.profitMode === 'per_grid' && (
                           <div>
-                            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-2`}>{isMobile ? '每格独立利润率，系统自动线性分配' : '每格设置独立的利润率范围，靠近开仓价的格子利润率低，靠近边界的格子利润率高，系统自动线性分配'}</p>
+                            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-2`}>{isMobile ? t('creator.perGridDescMobile') : t('creator.perGridDesc')}</p>
                             <div className="grid grid-cols-2 gap-3">
                               <div className="relative">
-                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>最小利润率</label>
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('creator.minRate')}</label>
                                 <input
                                   className="input-field text-sm mt-1 pr-8"
                                   type="number"
@@ -876,7 +878,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                                 <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
                               </div>
                               <div className="relative">
-                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>最大利润率</label>
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('creator.maxRate')}</label>
                                 <input
                                   className="input-field text-sm mt-1 pr-8"
                                   type="number"
@@ -892,10 +894,10 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
 
                         {layer.profitMode === 'distance_increase' && (
                           <div>
-                            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-2`}>{isMobile ? '距离越远利润率越高，不超过上限' : '离开仓价越远的网格，利润率越高。从基础利润率开始，每远离一格递增指定百分比，不超过最大上限'}</p>
+                            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-2`}>{isMobile ? t('creator.distanceDescMobile') : t('creator.distanceDesc')}</p>
                             <div className={`grid ${isMobile ? 'grid-cols-3' : 'grid-cols-3'} gap-2`}>
                               <div className="relative">
-                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>基础率</label>
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('creator.baseRate')}</label>
                                 <input
                                   className="input-field text-sm mt-1 pr-8"
                                   type="number"
@@ -906,7 +908,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                                 <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
                               </div>
                               <div className="relative">
-                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>每格递增</label>
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('creator.incrementPerGrid')}</label>
                                 <input
                                   className="input-field text-sm mt-1 pr-8"
                                   type="number"
@@ -917,7 +919,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                                 <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
                               </div>
                               <div className="relative">
-                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>上限</label>
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('creator.maxCap')}</label>
                                 <input
                                   className="input-field text-sm mt-1 pr-8"
                                   type="number"
@@ -933,10 +935,10 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
 
                         {layer.profitMode === 'trend_increase' && (
                           <div>
-                            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-2`}>{isMobile ? '根据趋势动态调整利润率' : '根据市场趋势动态调整利润率。实际利润率 = 基础利润率 × 调整比例'}</p>
+                            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-2`}>{isMobile ? t('creator.trendDescMobile') : t('creator.trendDesc')}</p>
                             <div className={`grid grid-cols-3 gap-2`}>
                               <div className="relative">
-                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>基础率</label>
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('creator.baseRate')}</label>
                                 <input
                                   className="input-field text-sm mt-1 pr-8"
                                   type="number"
@@ -947,7 +949,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                                 <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
                               </div>
                               <div className="relative">
-                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? '涨时比例' : '上涨时调整比例'}</label>
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? t('creator.bullRatioMobile') : t('creator.bullRatio')}</label>
                                 <input
                                   className="input-field text-sm mt-1 pr-8"
                                   type="number"
@@ -958,7 +960,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                                 <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
                               </div>
                               <div className="relative">
-                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? '跌时比例' : '下跌时调整比例'}</label>
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? t('creator.bearRatioMobile') : t('creator.bearRatio')}</label>
                                 <input
                                   className="input-field text-sm mt-1 pr-8"
                                   type="number"
@@ -970,7 +972,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                               </div>
                             </div>
                             <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mt-2`}>
-                              示例：{layer.trendBaseRate}%×{Math.round(layer.trendBullMultiplier * 100)}%={(layer.trendBaseRate * layer.trendBullMultiplier).toFixed(1)}%，
+                              {t('creator.example')}：{layer.trendBaseRate}%×{Math.round(layer.trendBullMultiplier * 100)}%={(layer.trendBaseRate * layer.trendBullMultiplier).toFixed(1)}%，
                               {layer.trendBaseRate}%×{Math.round(layer.trendBearMultiplier * 100)}%={(layer.trendBaseRate * layer.trendBearMultiplier).toFixed(1)}%
                             </p>
                           </div>
@@ -987,19 +989,19 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
           {step === 5 && (
             <>
               <div>
-                <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>利润分配模式</label>
+                <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>{t('creator.profitAllocation')}</label>
                 <select className="select-field" value={profitAllocation} onChange={(e) => setProfitAllocation(e.target.value as ProfitAllocation)}>
-                  <option value="all_usdt">全部转为 USDT</option>
-                  <option value="all_coin">全部转为币</option>
-                  <option value="ratio">按比例分配</option>
-                  <option value="reinvest">自动滚动投入</option>
-                  <option value="threshold_switch">阈值切换</option>
+                  <option value="all_usdt">{t('creator.allUsdt')}</option>
+                  <option value="all_coin">{t('creator.allCoin')}</option>
+                  <option value="ratio">{t('creator.ratioSplit')}</option>
+                  <option value="reinvest">{t('creator.reinvest')}</option>
+                  <option value="threshold_switch">{t('creator.thresholdSwitch')}</option>
                 </select>
               </div>
 
               {profitAllocation === 'reinvest' && (
                 <div className={isMobile ? 'space-y-2' : 'space-y-3'}>
-                  <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>选择利润滚动投入的方式</p>
+                  <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('creator.reinvestDesc')}</p>
                   <div className={`grid ${isMobile ? 'grid-cols-1 gap-2' : 'grid-cols-2 gap-3'}`}>
                     <button
                       className={`${isMobile ? 'p-2.5' : 'p-3'} rounded-lg border ${isMobile ? 'text-xs' : 'text-sm'} text-left transition-colors ${
@@ -1009,8 +1011,8 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                       }`}
                       onClick={() => setReinvestMode('per_grid')}
                     >
-                      <span className="font-medium block">投入当前网格</span>
-                      <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-1 block`}>{isMobile ? '逐格复投滚大' : '利润属于哪一格，就在这一格进行复投，逐格滚大'}</span>
+                      <span className="font-medium block">{t('creator.reinvestPerGrid')}</span>
+                      <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-1 block`}>{isMobile ? t('creator.reinvestPerGridDescMobile') : t('creator.reinvestPerGridDesc')}</span>
                     </button>
                     <button
                       className={`${isMobile ? 'p-2.5' : 'p-3'} rounded-lg border ${isMobile ? 'text-xs' : 'text-sm'} text-left transition-colors ${
@@ -1020,8 +1022,8 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                       }`}
                       onClick={() => setReinvestMode('whole_strategy')}
                     >
-                      <span className="font-medium block">投入整个策略</span>
-                      <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-1 block`}>{isMobile ? '融入资金池等比例滚动' : '利润自动融入整个策略资金池，所有网格等比例滚动'}</span>
+                      <span className="font-medium block">{t('creator.reinvestWholeStrategy')}</span>
+                      <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-1 block`}>{isMobile ? t('creator.reinvestWholeStrategyDescMobile') : t('creator.reinvestWholeStrategyDesc')}</span>
                     </button>
                   </div>
                 </div>
@@ -1030,35 +1032,35 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
               {profitAllocation === 'threshold_switch' && (
                 <div className={isMobile ? 'space-y-2' : 'space-y-3'}>
                   <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>
-                    {isMobile ? '低于持币价全部持币，高于持U价全部卖出' : '价格低于持币价格时，利润全部持币不卖出；价格高于持U价格时，利润部分全部卖出持有 USDT'}
+                    {isMobile ? t('creator.thresholdDescMobile') : t('creator.thresholdDesc')}
                   </p>
                   <div className={`grid ${isMobile ? 'grid-cols-1 gap-3' : 'grid-cols-2 gap-4'}`}>
                     <div>
-                      <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 block mb-1`}>{isMobile ? '持币价格' : '持币价格（低于此价全部持币）'}</label>
+                      <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 block mb-1`}>{isMobile ? t('creator.holdCoinPriceMobile') : t('creator.holdCoinPrice')}</label>
                       <input
                         className="input-field text-sm"
                         type="number"
                         step="0.01"
-                        placeholder={entryPrice > 0 ? `默认 ${(entryPrice * 0.75).toFixed(2)}` : '请先设置开仓价'}
+                        placeholder={entryPrice > 0 ? `${(entryPrice * 0.75).toFixed(2)}` : t('creator.entryPricePlaceholder')}
                         value={thresholdHoldCoinPrice || ''}
                         onChange={(e) => setThresholdHoldCoinPrice(Number(e.target.value))}
                       />
                       {entryPrice > 0 && (
-                        <p className="text-sm text-slate-600 mt-1">开仓价 -25% = {(entryPrice * 0.75).toFixed(2)}</p>
+                        <p className="text-sm text-slate-600 mt-1">{t('creator.defaultEntryMinus')} = {(entryPrice * 0.75).toFixed(2)}</p>
                       )}
                     </div>
                     <div>
-                      <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 block mb-1`}>{isMobile ? '持U价格' : '持U价格（高于此价利润全部持U）'}</label>
+                      <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 block mb-1`}>{isMobile ? t('creator.holdUsdtPriceMobile') : t('creator.holdUsdtPrice')}</label>
                       <input
                         className="input-field text-sm"
                         type="number"
                         step="0.01"
-                        placeholder={entryPrice > 0 ? `默认 ${(entryPrice * 1.25).toFixed(2)}` : '请先设置开仓价'}
+                        placeholder={entryPrice > 0 ? `${(entryPrice * 1.25).toFixed(2)}` : t('creator.entryPricePlaceholder')}
                         value={thresholdHoldUsdtPrice || ''}
                         onChange={(e) => setThresholdHoldUsdtPrice(Number(e.target.value))}
                       />
                       {entryPrice > 0 && (
-                        <p className="text-sm text-slate-600 mt-1">开仓价 +25% = {(entryPrice * 1.25).toFixed(2)}</p>
+                        <p className="text-sm text-slate-600 mt-1">{t('creator.defaultEntryPlus')} = {(entryPrice * 1.25).toFixed(2)}</p>
                       )}
                     </div>
                   </div>
@@ -1070,7 +1072,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                         setThresholdHoldUsdtPrice(+(entryPrice * 1.25).toFixed(2));
                       }}
                     >
-                      一键填入默认值（开仓价 ±25%）
+                      {t('creator.fillDefault')}
                     </button>
                   )}
                 </div>
@@ -1078,42 +1080,42 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
 
               {profitAllocation === 'ratio' && (
                 <div>
-                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>USDT 占比: {profitRatio}%</label>
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>{t('creator.usdtRatio')}: {profitRatio}%</label>
                   <input type="range" className="w-full" min="0" max="100" value={profitRatio} onChange={(e) => setProfitRatio(Number(e.target.value))} />
                   <div className="flex justify-between text-sm text-slate-500 mt-1">
-                    <span>100% 币</span>
-                    <span>100% USDT</span>
+                    <span>{t('creator.allCoinLabel')}</span>
+                    <span>{t('creator.allUsdtLabel')}</span>
                   </div>
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>区间突破</label>
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>{t('creator.rangeBreakout')}</label>
                   <label className={`flex items-center gap-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>
                     <input type="checkbox" checked={autoRebalance} onChange={(e) => setAutoRebalance(e.target.checked)} className="rounded" />
-                    自动再平衡
+                    {t('creator.autoRebalance')}
                   </label>
                 </div>
                 <div>
-                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>结束模式</label>
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>{t('creator.endMode')}</label>
                   <select className="select-field" value={endMode} onChange={(e) => setEndMode(e.target.value as EndMode)}>
-                    <option value="hold_coin">全部持币</option>
-                    <option value="hold_usdt">全部持USDT</option>
-                    <option value="keep_position">保持当前仓位</option>
-                    <option value="force_close">强制清仓</option>
+                    <option value="hold_coin">{t('creator.endModeHoldCoin')}</option>
+                    <option value="hold_usdt">{t('creator.endModeHoldUsdt')}</option>
+                    <option value="keep_position">{t('creator.endModeKeepPosition')}</option>
+                    <option value="force_close">{t('creator.endModeForceClose')}</option>
                   </select>
                 </div>
               </div>
 
               {/* Summary */}
               <div className={`${isMobile ? 'p-3' : 'p-4'} rounded-xl space-y-2`} style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(99,102,241,0.05) 100%)', border: '1px solid rgba(59,130,246,0.2)', boxShadow: '0 0 20px -4px rgba(59,130,246,0.1)' }}>
-                <h4 className={`${isMobile ? 'text-sm' : ''} font-medium text-blue-400`}>策略摘要</h4>
+                <h4 className={`${isMobile ? 'text-sm' : ''} font-medium text-blue-400`}>{t('creator.summary')}</h4>
                 <div className={`grid grid-cols-2 gap-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>
-                  <p className="text-slate-400">交易对: <span className="text-white">{symbol}</span></p>
-                  <p className="text-slate-400">资金: <span className="text-white">{totalFund} USDT</span></p>
-                  <p className="text-slate-400">区间: <span className="text-white">{lowerPrice.toFixed(2)} - {upperPrice.toFixed(2)}</span></p>
-                  <p className="text-slate-400">网格总数: <span className="text-white">{layers.filter((l) => l.enabled).reduce((a, l) => a + l.gridCount, 0)}</span></p>
+                  <p className="text-slate-400">{t('creator.summaryPair')}: <span className="text-white">{symbol}</span></p>
+                  <p className="text-slate-400">{t('creator.summaryFund')}: <span className="text-white">{totalFund} USDT</span></p>
+                  <p className="text-slate-400">{t('creator.summaryRange')}: <span className="text-white">{lowerPrice.toFixed(2)} - {upperPrice.toFixed(2)}</span></p>
+                  <p className="text-slate-400">{t('creator.summaryGridTotal')}: <span className="text-white">{layers.filter((l) => l.enabled).reduce((a, l) => a + l.gridCount, 0)}</span></p>
                 </div>
               </div>
             </>
@@ -1126,7 +1128,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
             className="btn-secondary"
             onClick={() => step > 1 ? setStep(step - 1) : onCancel()}
           >
-            {step > 1 ? '上一步' : '取消'}
+            {step > 1 ? t('common.previous') : t('common.cancel')}
           </button>
           {step < 5 ? (
             <button
@@ -1137,11 +1139,11 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                 (step === 2 && (!symbol || !name || totalFund <= 0))
               }
             >
-              下一步
+              {t('common.next')}
             </button>
           ) : (
             <button className="btn-success" onClick={handleCreate}>
-              创建策略
+              {t('creator.createStrategy')}
             </button>
           )}
         </div>

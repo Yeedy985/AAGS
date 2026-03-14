@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Shield, AlertTriangle, TrendingDown, BarChart2, Activity } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/useStore';
 import { db } from '../db';
 import type { Strategy, RiskConfig } from '../types';
 
 export default function RiskControl() {
   const { strategies, updateStrategy } = useStore();
+  const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState<number | null>(strategies[0]?.id ?? null);
 
   const selected = strategies.find((s) => s.id === selectedId);
@@ -23,11 +25,11 @@ export default function RiskControl() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">风险控制</h1>
+        <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">{t('risk.title')}</h1>
       </div>
 
       {strategies.length === 0 ? (
-        <div className="card py-16 text-center text-slate-500">暂无策略，请先创建策略</div>
+        <div className="card py-16 text-center text-slate-500">{t('risk.noStrategies')}</div>
       ) : (
         <>
           {/* Strategy Selector */}
@@ -57,8 +59,8 @@ export default function RiskControl() {
                     <AlertTriangle className="w-5 h-5 text-red-400" />
                   </div>
                   <div>
-                    <h3 className="font-semibold">极端行情熔断</h3>
-                    <p className="text-sm text-slate-500">5分钟跌幅或成交量异常时触发</p>
+                    <h3 className="font-semibold">{t('risk.circuitBreak.title')}</h3>
+                    <p className="text-sm text-slate-500">{t('risk.circuitBreak.desc')}</p>
                   </div>
                 </div>
                 <label className="flex items-center gap-3">
@@ -68,12 +70,12 @@ export default function RiskControl() {
                     onChange={(e) => updateRisk({ circuitBreakEnabled: e.target.checked })}
                     className="rounded"
                   />
-                  <span className="text-sm">启用熔断保护</span>
+                  <span className="text-sm">{t('risk.circuitBreak.enable')}</span>
                 </label>
                 {selected.risk.circuitBreakEnabled && (
                   <div className="space-y-3">
                     <div>
-                      <label className="text-sm text-slate-500 block mb-1">5分钟跌幅阈值 (%)</label>
+                      <label className="text-sm text-slate-500 block mb-1">{t('risk.circuitBreak.dropThreshold')}</label>
                       <input
                         className="input-field"
                         type="number"
@@ -83,7 +85,7 @@ export default function RiskControl() {
                       />
                     </div>
                     <div>
-                      <label className="text-sm text-slate-500 block mb-1">成交量异常倍数</label>
+                      <label className="text-sm text-slate-500 block mb-1">{t('risk.circuitBreak.volumeMultiple')}</label>
                       <input
                         className="input-field"
                         type="number"
@@ -103,8 +105,8 @@ export default function RiskControl() {
                     <TrendingDown className="w-5 h-5 text-yellow-400" />
                   </div>
                   <div>
-                    <h3 className="font-semibold">单日回撤限制</h3>
-                    <p className="text-sm text-slate-500">当日亏损超过设定比例时暂停</p>
+                    <h3 className="font-semibold">{t('risk.dailyDrawdown.title')}</h3>
+                    <p className="text-sm text-slate-500">{t('risk.dailyDrawdown.desc')}</p>
                   </div>
                 </div>
                 <label className="flex items-center gap-3">
@@ -114,11 +116,11 @@ export default function RiskControl() {
                     onChange={(e) => updateRisk({ dailyDrawdownEnabled: e.target.checked })}
                     className="rounded"
                   />
-                  <span className="text-sm">启用回撤限制</span>
+                  <span className="text-sm">{t('risk.dailyDrawdown.enable')}</span>
                 </label>
                 {selected.risk.dailyDrawdownEnabled && (
                   <div>
-                    <label className="text-sm text-slate-500 block mb-1">最大日回撤 (%)</label>
+                    <label className="text-sm text-slate-500 block mb-1">{t('risk.dailyDrawdown.maxPercent')}</label>
                     <input
                       className="input-field"
                       type="number"
@@ -137,8 +139,8 @@ export default function RiskControl() {
                     <BarChart2 className="w-5 h-5 text-blue-400" />
                   </div>
                   <div>
-                    <h3 className="font-semibold">最大仓位限制</h3>
-                    <p className="text-sm text-slate-500">防止资金全部变成单一资产</p>
+                    <h3 className="font-semibold">{t('risk.maxPosition.title')}</h3>
+                    <p className="text-sm text-slate-500">{t('risk.maxPosition.desc')}</p>
                   </div>
                 </div>
                 <label className="flex items-center gap-3">
@@ -148,11 +150,11 @@ export default function RiskControl() {
                     onChange={(e) => updateRisk({ maxPositionEnabled: e.target.checked })}
                     className="rounded"
                   />
-                  <span className="text-sm">启用仓位限制</span>
+                  <span className="text-sm">{t('risk.maxPosition.enable')}</span>
                 </label>
                 {selected.risk.maxPositionEnabled && (
                   <div>
-                    <label className="text-sm text-slate-500 block mb-1">单资产最大占比 (%)</label>
+                    <label className="text-sm text-slate-500 block mb-1">{t('risk.maxPosition.maxPercent')}</label>
                     <input
                       className="input-field"
                       type="number"
@@ -171,8 +173,8 @@ export default function RiskControl() {
                     <Activity className="w-5 h-5 text-purple-400" />
                   </div>
                   <div>
-                    <h3 className="font-semibold">趋势防御模式</h3>
-                    <p className="text-sm text-slate-500">熊市时自动减少网格、提高利润率</p>
+                    <h3 className="font-semibold">{t('risk.trendDefense.title')}</h3>
+                    <p className="text-sm text-slate-500">{t('risk.trendDefense.desc')}</p>
                   </div>
                 </div>
                 <label className="flex items-center gap-3">
@@ -182,12 +184,12 @@ export default function RiskControl() {
                     onChange={(e) => updateRisk({ trendDefenseEnabled: e.target.checked })}
                     className="rounded"
                   />
-                  <span className="text-sm">启用趋势防御</span>
+                  <span className="text-sm">{t('risk.trendDefense.enable')}</span>
                 </label>
                 {selected.risk.trendDefenseEnabled && (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-sm text-slate-500 block mb-1">快线 EMA 周期</label>
+                      <label className="text-sm text-slate-500 block mb-1">{t('risk.trendDefense.emaFast')}</label>
                       <input
                         className="input-field"
                         type="number"
@@ -196,7 +198,7 @@ export default function RiskControl() {
                       />
                     </div>
                     <div>
-                      <label className="text-sm text-slate-500 block mb-1">慢线 EMA 周期</label>
+                      <label className="text-sm text-slate-500 block mb-1">{t('risk.trendDefense.emaSlow')}</label>
                       <input
                         className="input-field"
                         type="number"
@@ -215,24 +217,24 @@ export default function RiskControl() {
             <div className="card">
               <h3 className="font-semibold mb-3 flex items-center gap-2">
                 <Shield className="w-5 h-5 text-blue-400" />
-                当前风控状态
+                {t('risk.statusOverview')}
               </h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                 <div className={`p-3 rounded-lg text-center ${
                   selected.status === 'circuit_break' ? 'bg-red-900/30 text-red-400' : 'bg-emerald-900/20 text-emerald-400'
                 }`}>
-                  {selected.status === 'circuit_break' ? '⚠️ 熔断中' : '✓ 正常'}
+                  {selected.status === 'circuit_break' ? `⚠️ ${t('risk.status.circuitBreak')}` : `✓ ${t('risk.status.normal')}`}
                 </div>
                 <div className="p-3 rounded-xl text-center" style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(51,65,85,0.3)' }}>
-                  <span className="text-sm text-slate-500">最大回撤</span><br/><span className="font-mono font-bold">{selected.maxDrawdown.toFixed(2)}%</span>
+                  <span className="text-sm text-slate-500">{t('risk.status.maxDrawdown')}</span><br/><span className="font-mono font-bold">{selected.maxDrawdown.toFixed(2)}%</span>
                 </div>
                 <div className="p-3 rounded-xl text-center" style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(51,65,85,0.3)' }}>
-                  <span className="text-sm text-slate-500">今日收益</span><br/><span className={`font-mono font-bold ${selected.todayProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <span className="text-sm text-slate-500">{t('risk.status.todayPnl')}</span><br/><span className={`font-mono font-bold ${selected.todayProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {selected.todayProfit >= 0 ? '+' : ''}{selected.todayProfit.toFixed(2)}
                   </span>
                 </div>
                 <div className="p-3 rounded-xl text-center" style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(51,65,85,0.3)' }}>
-                  <span className="text-sm text-slate-500">策略状态</span><br/>{selected.status === 'running' ? '🟢 运行中' : selected.status === 'paused' ? '🟡 已暂停' : '⚪ 已停止'}
+                  <span className="text-sm text-slate-500">{t('risk.status.strategyStatus')}</span><br/>{selected.status === 'running' ? `🟢 ${t('strategy.status.running')}` : selected.status === 'paused' ? `🟡 ${t('strategy.status.paused')}` : `⚪ ${t('strategy.status.stopped')}`}
                 </div>
               </div>
             </div>

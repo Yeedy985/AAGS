@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Plus, Trash2, Play, Loader2, ChevronDown, ChevronUp,
   TrendingUp, TrendingDown, Eye, EyeOff, AlertTriangle,
@@ -31,6 +32,7 @@ import type { PipelineProgress } from '../services/llmService';
 
 // ==================== 子组件: LLM 配置面板 ====================
 function LLMConfigPanel() {
+  const { t } = useTranslation();
   const llmConfigs = useLiveQuery(() => db.llmConfigs.toArray(), []);
   const [showForm, setShowForm] = useState(false);
   const [provider, setProvider] = useState<LLMProvider>('perplexity');
@@ -111,7 +113,7 @@ function LLMConfigPanel() {
     <div className="card space-y-4">
       <div className="flex items-center justify-end">
         <button className="btn-primary text-sm flex items-center gap-1" onClick={() => { setShowForm(!showForm); if (!showForm) handleProviderChange('perplexity'); }}>
-          <Plus className="w-4 h-4" /> 添加
+          <Plus className="w-4 h-4" /> {t('sentiment.llm.add')}
         </button>
       </div>
 
@@ -120,29 +122,29 @@ function LLMConfigPanel() {
         <div className="flex items-center gap-4 text-sm">
           <div className="flex items-center gap-1.5">
             <span className="w-6 h-6 rounded-full bg-cyan-600/20 text-cyan-400 flex items-center justify-center text-sm font-bold">0</span>
-            <span className="text-slate-400">📡 免费数据采集</span>
+            <span className="text-slate-400">{t('sentiment.llm.freeData')}</span>
           </div>
           <span className="text-slate-600">→</span>
           <div className="flex items-center gap-1.5">
             <span className="w-6 h-6 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm font-bold">1</span>
-            <span className="text-slate-400">🔍 搜索 LLM</span>
-            <span className="text-slate-600">{searchers.find(s => s.enabled) ? `(${LLM_PROVIDERS[searchers.find(s => s.enabled)!.provider]?.name})` : '(未配置)'}</span>
+            <span className="text-slate-400">{t('sentiment.llm.searchLLM')}</span>
+            <span className="text-slate-600">{searchers.find(s => s.enabled) ? `(${LLM_PROVIDERS[searchers.find(s => s.enabled)!.provider]?.name})` : t('sentiment.llm.notConfigured')}</span>
           </div>
           <span className="text-slate-600">→</span>
           <div className="flex items-center gap-1.5">
             <span className="w-6 h-6 rounded-full bg-purple-600/20 text-purple-400 flex items-center justify-center text-sm font-bold">2</span>
-            <span className="text-slate-400">🧠 分析 LLM</span>
-            <span className="text-slate-600">{analyzers.find(a => a.enabled) ? `(${LLM_PROVIDERS[analyzers.find(a => a.enabled)!.provider]?.name})` : '(未配置)'}</span>
+            <span className="text-slate-400">{t('sentiment.llm.analyzeLLM')}</span>
+            <span className="text-slate-600">{analyzers.find(a => a.enabled) ? `(${LLM_PROVIDERS[analyzers.find(a => a.enabled)!.provider]?.name})` : t('sentiment.llm.notConfigured')}</span>
           </div>
         </div>
-        <p className="text-sm text-slate-600 mt-2">Step0 自动采集行情/新闻/恐贪指数 → Step1 Searcher 联网搜索实时情报(可选) → Step2 Analyzer 分析300信号矩阵(必需)</p>
+        <p className="text-sm text-slate-600 mt-2">{t('sentiment.llm.pipelineDesc')}</p>
       </div>
 
       {showForm && (
         <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 space-y-4">
           {/* 角色选择 */}
           <div>
-            <label className="text-sm font-medium text-slate-300 block mb-2">角色</label>
+            <label className="text-sm font-medium text-slate-300 block mb-2">{t('sentiment.llm.role')}</label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 className={`p-3 rounded-lg border text-sm text-left transition-colors ${role === 'searcher' ? 'border-blue-500 bg-blue-600/10' : 'border-slate-700 hover:border-slate-600'}`}
@@ -150,9 +152,9 @@ function LLMConfigPanel() {
               >
                 <div className="flex items-center gap-2">
                   <Search className="w-4 h-4 text-blue-400" />
-                  <span className={role === 'searcher' ? 'text-blue-400 font-medium' : ''}>🔍 搜索 Searcher</span>
+                  <span className={role === 'searcher' ? 'text-blue-400 font-medium' : ''}>{t('sentiment.llm.searcherRole')}</span>
                 </div>
-                <p className="text-sm text-slate-500 mt-1">联网搜索实时市场情报（推荐 Perplexity / Gemini）</p>
+                <p className="text-sm text-slate-500 mt-1">{t('sentiment.llm.searcherDesc')}</p>
               </button>
               <button
                 className={`p-3 rounded-lg border text-sm text-left transition-colors ${role === 'analyzer' ? 'border-purple-500 bg-purple-600/10' : 'border-slate-700 hover:border-slate-600'}`}
@@ -160,15 +162,15 @@ function LLMConfigPanel() {
               >
                 <div className="flex items-center gap-2">
                   <Brain className="w-4 h-4 text-purple-400" />
-                  <span className={role === 'analyzer' ? 'text-purple-400 font-medium' : ''}>🧠 分析 Analyzer</span>
+                  <span className={role === 'analyzer' ? 'text-purple-400 font-medium' : ''}>{t('sentiment.llm.analyzerRole')}</span>
                 </div>
-                <p className="text-sm text-slate-500 mt-1">深度分析300信号矩阵（推荐 DeepSeek / Gemini / GPT）</p>
+                <p className="text-sm text-slate-500 mt-1">{t('sentiment.llm.analyzerDesc')}</p>
               </button>
             </div>
           </div>
           {/* 模型提供商 */}
           <div>
-            <label className="text-sm font-medium text-slate-300 block mb-2">模型提供商</label>
+            <label className="text-sm font-medium text-slate-300 block mb-2">{t('sentiment.llm.provider')}</label>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {(Object.entries(LLM_PROVIDERS) as [LLMProvider, typeof LLM_PROVIDERS[LLMProvider]][]).map(([key, cfg]) => {
                 const supported = cfg.supportedRoles.includes(role);
@@ -191,38 +193,38 @@ function LLMConfigPanel() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm text-slate-400 block mb-1">API Key</label>
+              <label className="text-sm text-slate-400 block mb-1">{t('sentiment.llm.apiKey')}</label>
               <div className="relative">
-                <input className="input-field pr-10" type={showKey ? 'text' : 'password'} placeholder="输入 API Key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+                <input className="input-field pr-10" type={showKey ? 'text' : 'password'} placeholder={t('sentiment.llm.apiKeyPlaceholder')} value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
                 <button className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-300" onClick={() => setShowKey(!showKey)}>
                   {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
             <div>
-              <label className="text-sm text-slate-400 block mb-1">API 地址</label>
+              <label className="text-sm text-slate-400 block mb-1">{t('sentiment.llm.apiUrl')}</label>
               <input className="input-field" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} placeholder={LLM_PROVIDERS[provider].defaultUrl} />
             </div>
             <div>
-              <label className="text-sm text-slate-400 block mb-1">模型名称</label>
+              <label className="text-sm text-slate-400 block mb-1">{t('sentiment.llm.modelName')}</label>
               <input className="input-field" value={model} onChange={(e) => setModel(e.target.value)} placeholder={LLM_PROVIDERS[provider].defaultModel} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-sm text-slate-400 block mb-1">最大 Token</label>
+                <label className="text-sm text-slate-400 block mb-1">{t('sentiment.llm.maxToken')}</label>
                 <input className="input-field" type="number" value={maxTokens} onChange={(e) => setMaxTokens(Number(e.target.value))} />
               </div>
               <div>
-                <label className="text-sm text-slate-400 block mb-1">温度</label>
+                <label className="text-sm text-slate-400 block mb-1">{t('sentiment.llm.temperature')}</label>
                 <input className="input-field" type="number" step="0.1" min="0" max="2" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} />
               </div>
             </div>
           </div>
           <div className="flex gap-2">
             <button className="btn-primary text-sm" onClick={handleSave} disabled={saving || !apiKey.trim()}>
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : '保存配置'}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t('sentiment.llm.saveConfig')}
             </button>
-            <button className="btn-secondary text-sm" onClick={() => setShowForm(false)}>取消</button>
+            <button className="btn-secondary text-sm" onClick={() => setShowForm(false)}>{t('common.cancel')}</button>
           </div>
         </div>
       )}
@@ -230,7 +232,7 @@ function LLMConfigPanel() {
       {/* 已配置列表 - 按角色分组 */}
       {searchers.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm text-slate-500 font-medium flex items-center gap-1"><Search className="w-3 h-3" /> 搜索 Searcher</p>
+          <p className="text-sm text-slate-500 font-medium flex items-center gap-1"><Search className="w-3 h-3" /> {t('sentiment.llm.searcherLabel')}</p>
           {searchers.map((c) => (
             <div key={c.id} className={`flex items-center justify-between p-3 rounded-lg border ${c.enabled ? 'border-blue-500/30 bg-blue-600/5' : 'border-slate-800 bg-slate-800/30'}`}>
               <div className="flex items-center gap-3">
@@ -242,7 +244,7 @@ function LLMConfigPanel() {
               </div>
               <div className="flex items-center gap-2">
                 <button className={`text-sm px-2 py-1 rounded ${c.enabled ? 'bg-blue-600/20 text-blue-400' : 'bg-slate-700 text-slate-400 hover:text-white'}`} onClick={() => handleToggle(c.id!, c.role, !c.enabled)}>
-                  {c.enabled ? '已启用' : '启用'}
+                  {c.enabled ? t('common.enabled') : t('sentiment.publicService.enable')}
                 </button>
                 <button className="p-1 text-slate-500 hover:text-red-400" onClick={() => handleDelete(c.id!)}>
                   <Trash2 className="w-4 h-4" />
@@ -254,7 +256,7 @@ function LLMConfigPanel() {
       )}
       {analyzers.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm text-slate-500 font-medium flex items-center gap-1"><Brain className="w-3 h-3" /> 分析 Analyzer</p>
+          <p className="text-sm text-slate-500 font-medium flex items-center gap-1"><Brain className="w-3 h-3" /> {t('sentiment.llm.analyzerLabel')}</p>
           {analyzers.map((c) => (
             <div key={c.id} className={`flex items-center justify-between p-3 rounded-lg border ${c.enabled ? 'border-purple-500/30 bg-purple-600/5' : 'border-slate-800 bg-slate-800/30'}`}>
               <div className="flex items-center gap-3">
@@ -266,7 +268,7 @@ function LLMConfigPanel() {
               </div>
               <div className="flex items-center gap-2">
                 <button className={`text-sm px-2 py-1 rounded ${c.enabled ? 'bg-purple-600/20 text-purple-400' : 'bg-slate-700 text-slate-400 hover:text-white'}`} onClick={() => handleToggle(c.id!, c.role, !c.enabled)}>
-                  {c.enabled ? '已启用' : '启用'}
+                  {c.enabled ? t('common.enabled') : t('sentiment.publicService.enable')}
                 </button>
                 <button className="p-1 text-slate-500 hover:text-red-400" onClick={() => handleDelete(c.id!)}>
                   <Trash2 className="w-4 h-4" />
@@ -283,16 +285,16 @@ function LLMConfigPanel() {
 // ==================== 子组件: 公共服务配置面板 ====================
 const DEFAULT_SERVER_URL = 'https://alphinel.com';
 
-const REPORT_MODE_OPTIONS: { value: ReportMode; label: string; desc: string; icon: typeof Radio }[] = [
-  { value: 'realtime', label: '实时推送', desc: 'SSE 实时接收，有新简报立即通知', icon: Radio },
-  { value: 'scheduled', label: '定时汇报', desc: '按设定时间自动扫描并推送简报', icon: CalendarClock },
-  { value: 'manual', label: '手动触发', desc: '仅在你点击「扫描」时才执行', icon: Hand },
+const REPORT_MODE_OPTIONS: { value: ReportMode; labelKey: string; descKey: string; icon: typeof Radio }[] = [
+  { value: 'realtime', labelKey: 'sentiment.reportMode.realtime', descKey: 'sentiment.reportMode.realtimeDesc', icon: Radio },
+  { value: 'scheduled', labelKey: 'sentiment.reportMode.scheduled', descKey: 'sentiment.reportMode.scheduledDesc', icon: CalendarClock },
+  { value: 'manual', labelKey: 'sentiment.reportMode.manual', descKey: 'sentiment.reportMode.manualDesc', icon: Hand },
 ];
 
-const ALERT_LEVEL_OPTIONS: { value: 'critical' | 'warning' | 'info'; label: string; emoji: string; desc: string }[] = [
-  { value: 'critical', label: '紧急预警', emoji: '🔴', desc: '立即推送' },
-  { value: 'warning', label: '一般预警', emoji: '🟡', desc: '随简报推送' },
-  { value: 'info', label: '信息通知', emoji: '🔵', desc: '低优先级' },
+const ALERT_LEVEL_OPTIONS: { value: 'critical' | 'warning' | 'info'; labelKey: string; emoji: string; descKey: string }[] = [
+  { value: 'critical', labelKey: 'sentiment.alertLevel.critical', emoji: '🔴', descKey: 'sentiment.alertLevel.criticalDesc' },
+  { value: 'warning', labelKey: 'sentiment.alertLevel.warning', emoji: '🟡', descKey: 'sentiment.alertLevel.warningDesc' },
+  { value: 'info', labelKey: 'sentiment.alertLevel.info', emoji: '🔵', descKey: 'sentiment.alertLevel.infoDesc' },
 ];
 
 // ==================== 全局汇报模式 (localStorage) ====================
@@ -557,6 +559,7 @@ const _globalAutoScan = {
 
 // ==================== 子组件: 自动扫描面板 (全局, 始终可见) ====================
 function AutoScanPanel({ analyzing }: { analyzing: boolean }) {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<ReportModeSettings>(getReportModeSettings);
   const [autoRunning, setAutoRunning] = useState(_globalAutoScan.running);
   const [countdown, setCountdown] = useState(_globalAutoScan.countdown);
@@ -601,10 +604,10 @@ function AutoScanPanel({ analyzing }: { analyzing: boolean }) {
             <div className="p-2 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.15) 0%, rgba(6,182,212,0.05) 100%)' }}>
               <Timer className="w-4.5 h-4.5 text-cyan-400" />
             </div>
-            自动扫描
+            {t('sentiment.autoScan.title')}
             {autoRunning && (
               <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-emerald-600/15 text-emerald-400 border border-emerald-500/20 animate-pulse">
-                ● 运行中
+                {t('sentiment.autoScan.running')}
               </span>
             )}
           </h3>
@@ -614,7 +617,7 @@ function AutoScanPanel({ analyzing }: { analyzing: boolean }) {
           {/* 扫描间隔 + 启停按钮 */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <label className="text-sm text-slate-400 shrink-0">扫描间隔</label>
+              <label className="text-sm text-slate-400 shrink-0">{t('sentiment.autoScan.interval')}</label>
               <input
                 type="number"
                 min={1}
@@ -624,7 +627,7 @@ function AutoScanPanel({ analyzing }: { analyzing: boolean }) {
                 disabled={autoRunning}
                 className="input-field w-20 text-sm text-center"
               />
-              <span className="text-sm text-slate-500">分钟</span>
+              <span className="text-sm text-slate-500">{t('sentiment.autoScan.minutes')}</span>
             </div>
             <button
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -636,9 +639,9 @@ function AutoScanPanel({ analyzing }: { analyzing: boolean }) {
               disabled={analyzing && !autoRunning}
             >
               {autoRunning ? (
-                <><Pause className="w-4 h-4" /> 停止自动扫描</>
+                <><Pause className="w-4 h-4" /> {t('sentiment.autoScan.stop')}</>
               ) : (
-                <><Play className="w-4 h-4" /> 启动自动扫描</>
+                <><Play className="w-4 h-4" /> {t('sentiment.autoScan.start')}</>
               )}
             </button>
           </div>
@@ -649,11 +652,11 @@ function AutoScanPanel({ analyzing }: { analyzing: boolean }) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-sm text-emerald-400">自动扫描运行中</span>
-                  <span className="text-sm text-slate-500">每 {settings.autoScanInterval} 分钟扫描一次</span>
+                  <span className="text-sm text-emerald-400">{t('sentiment.autoScan.statusRunning')}</span>
+                  <span className="text-sm text-slate-500">{t('sentiment.autoScan.everyNMinutes', { n: settings.autoScanInterval })}</span>
                 </div>
                 <span className="text-sm font-mono text-cyan-400 tabular-nums">
-                  {analyzing ? '扫描中...' : `下次: ${formatCountdown(countdown)}`}
+                  {analyzing ? t('sentiment.autoScan.scanning') : t('sentiment.autoScan.nextScan', { time: formatCountdown(countdown) })}
                 </span>
               </div>
               {/* 进度条 */}
@@ -665,7 +668,7 @@ function AutoScanPanel({ analyzing }: { analyzing: boolean }) {
               </div>
               {lastScanTime && (
                 <p className="text-xs text-slate-600">
-                  上次扫描: {new Date(lastScanTime).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  {t('sentiment.autoScan.lastScan', { time: new Date(lastScanTime).toLocaleTimeString() })}
                 </p>
               )}
             </div>
@@ -674,7 +677,7 @@ function AutoScanPanel({ analyzing }: { analyzing: boolean }) {
           {/* 提示文字 */}
           {!autoRunning && (
             <p className="text-xs text-slate-600">
-              设置扫描间隔后点击「启动自动扫描」，系统将按设定间隔自动执行信号扫描并推送结果。适用于公共服务和自建模式。
+              {t('sentiment.autoScan.hint')}
             </p>
           )}
         </div>
@@ -684,6 +687,7 @@ function AutoScanPanel({ analyzing }: { analyzing: boolean }) {
 }
 
 function PublicServiceConfigPanel() {
+  const { t } = useTranslation();
   const configs = useLiveQuery(() => db.publicServiceConfigs.toArray(), []);
   const briefings = useLiveQuery(() => db.scanBriefings.orderBy('receivedAt').reverse().limit(10).toArray(), []);
 
@@ -813,11 +817,11 @@ function PublicServiceConfigPanel() {
   const handleCheck = async () => {
     if (!activeConfig) return;
     setChecking(true);
-    setStatusMsg('检测中...');
+    setStatusMsg(t('sentiment.publicService.checking'));
     const result = await checkServiceStatus(activeConfig);
     setStatusMsg(result.ok
-      ? `✅ 连接正常${result.version ? ` (v${result.version})` : ''}`
-      : `❌ ${result.message || '连接失败'}`
+      ? `${t('sentiment.publicService.connOk')}${result.version ? ` (v${result.version})` : ''}`
+      : t('sentiment.publicService.connFail', { message: result.message || t('sentiment.publicService.connFailDefault') })
     );
     setChecking(false);
   };
@@ -843,7 +847,10 @@ function PublicServiceConfigPanel() {
     );
   };
 
-  const reportModeLabel = (m: ReportMode) => REPORT_MODE_OPTIONS.find(o => o.value === m)?.label || m;
+  const reportModeLabel = (m: ReportMode) => {
+    const key = m === 'realtime' ? 'sentiment.reportMode.realtime' : m === 'scheduled' ? 'sentiment.reportMode.scheduled' : 'sentiment.reportMode.manual';
+    return t(key);
+  };
 
   const handleStartEdit = (c: any) => {
     setEditingId(c.id);
@@ -875,11 +882,11 @@ function PublicServiceConfigPanel() {
             rel="noopener noreferrer"
             className="btn-secondary text-sm flex items-center gap-1"
           >
-            <ExternalLink className="w-3.5 h-3.5" /> 进入主页
+            <ExternalLink className="w-3.5 h-3.5" /> {t('sentiment.publicService.enterHome')}
           </a>
         </div>
         <button className="btn-primary text-sm flex items-center gap-1" onClick={() => setShowForm(!showForm)}>
-          <Plus className="w-4 h-4" /> 配置服务
+          <Plus className="w-4 h-4" /> {t('sentiment.publicService.configService')}
         </button>
       </div>
 
@@ -888,21 +895,21 @@ function PublicServiceConfigPanel() {
         <div className="flex items-center gap-4 text-sm">
           <div className="flex items-center gap-1.5">
             <Server className="w-4 h-4 text-cyan-400" />
-            <span className="text-slate-400">服务端完成全部扫描</span>
+            <span className="text-slate-400">{t('sentiment.publicService.serverScan')}</span>
           </div>
           <span className="text-slate-600">→</span>
           <div className="flex items-center gap-1.5">
             <Send className="w-4 h-4 text-blue-400" />
-            <span className="text-slate-400">推送简报到客户端</span>
+            <span className="text-slate-400">{t('sentiment.publicService.pushBriefing')}</span>
           </div>
           <span className="text-slate-600">→</span>
           <div className="flex items-center gap-1.5">
             <Wifi className="w-4 h-4 text-emerald-400" />
-            <span className="text-slate-400">同步社交工具</span>
+            <span className="text-slate-400">{t('sentiment.publicService.syncSocial')}</span>
           </div>
         </div>
         <p className="text-sm text-slate-600">
-          无需配置 API Key。在公共服务主页注册账号并获取认证令牌，即可使用完整的 Perplexity + DeepSeek/Gemini 分析管线。每次扫描消耗 Token 余额。
+          {t('sentiment.publicService.publicDesc')}
         </p>
       </div>
 
@@ -910,12 +917,12 @@ function PublicServiceConfigPanel() {
       {showForm && (
         <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 space-y-4">
           <div>
-            <label className="text-sm text-slate-400 block mb-1">服务器地址</label>
+            <label className="text-sm text-slate-400 block mb-1">{t('sentiment.publicService.serverUrl')}</label>
             <input className="input-field bg-slate-800/60 text-slate-500 cursor-not-allowed" value={serverUrl} readOnly />
           </div>
           <div>
-            <label className="text-sm text-slate-400 block mb-1">认证令牌</label>
-            <p className="text-sm text-slate-600 mb-1">在公共服务主页 → API 令牌页面生成</p>
+            <label className="text-sm text-slate-400 block mb-1">{t('sentiment.publicService.authToken')}</label>
+            <p className="text-sm text-slate-600 mb-1">{t('sentiment.publicService.authTokenHint')}</p>
             <div className="relative">
               <input className="input-field pr-10" type={showToken ? 'text' : 'password'} placeholder="stx_xxxxxxxx" value={authToken} onChange={(e) => setAuthToken(e.target.value)} />
               <button className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-300" onClick={() => setShowToken(!showToken)}>
@@ -926,9 +933,9 @@ function PublicServiceConfigPanel() {
 
           <div className="flex gap-2">
             <button className="btn-primary text-sm" onClick={handleSave} disabled={saving || !serverUrl.trim() || !authToken.trim()}>
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : '保存配置'}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t('sentiment.publicService.saveConfig')}
             </button>
-            <button className="btn-secondary text-sm" onClick={() => setShowForm(false)}>取消</button>
+            <button className="btn-secondary text-sm" onClick={() => setShowForm(false)}>{t('common.cancel')}</button>
           </div>
         </div>
       )}
@@ -945,7 +952,7 @@ function PublicServiceConfigPanel() {
                     <span className="font-medium text-sm">{c.serverUrl}</span>
                     {c.enabled && (
                       <span className={`text-sm ml-2 ${sseConnected ? 'text-emerald-400' : 'text-yellow-400'}`}>
-                        {globalReportMode === 'realtime' ? (sseConnected ? '● 实时连接中' : '○ 未连接') : `📋 ${reportModeLabel(globalReportMode)}`}
+                        {globalReportMode === 'realtime' ? (sseConnected ? t('sentiment.publicService.realtimeConn') : t('sentiment.publicService.notConnected')) : `📋 ${reportModeLabel(globalReportMode)}`}
                       </span>
                     )}
                   </div>
@@ -954,18 +961,18 @@ function PublicServiceConfigPanel() {
                   {c.enabled && (
                     <>
                       <button className="text-sm px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-white" onClick={handleCheck} disabled={checking}>
-                        {checking ? <Loader2 className="w-3 h-3 animate-spin" /> : '检测'}
+                        {checking ? <Loader2 className="w-3 h-3 animate-spin" /> : t('sentiment.publicService.check')}
                       </button>
                       <button className="text-sm px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-white" onClick={() => editingId === c.id ? setEditingId(null) : handleStartEdit(c)}>
-                        编辑
+                        {t('sentiment.publicService.edit')}
                       </button>
                       <button className="text-sm px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-white" onClick={() => setShowPrefs(!showPrefs)}>
-                        偏好
+                        {t('sentiment.publicService.prefs')}
                       </button>
                     </>
                   )}
                   <button className={`text-sm px-2 py-1 rounded ${c.enabled ? 'bg-cyan-600/20 text-cyan-400' : 'bg-slate-700 text-slate-400 hover:text-white'}`} onClick={() => handleToggle(c.id!, !c.enabled)}>
-                    {c.enabled ? '已启用' : '启用'}
+                    {c.enabled ? t('sentiment.publicService.enabled') : t('sentiment.publicService.enable')}
                   </button>
                   <button className="p-1 text-slate-500 hover:text-red-400" onClick={() => handleDelete(c.id!)}>
                     <Trash2 className="w-4 h-4" />
@@ -977,10 +984,10 @@ function PublicServiceConfigPanel() {
               )}
               {c.enabled && (
                 <div className="flex items-center gap-3 px-3 pb-2 text-sm text-slate-600">
-                  <span>模式: {reportModeLabel(globalReportMode)}</span>
-                  <span>通知: {c.notifyEnabled ? `${c.notifyLevels.length}级` : '关闭'}</span>
-                  <span>搜索增强: {c.enableSearch ? '开' : '关'}</span>
-                  {c.lastConnectedAt && <span>上次: {new Date(c.lastConnectedAt).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
+                  <span>{t('sentiment.publicService.mode')}: {reportModeLabel(globalReportMode)}</span>
+                  <span>{t('sentiment.publicService.notify')}: {c.notifyEnabled ? t('sentiment.publicService.notifyLevels', { count: c.notifyLevels.length }) : t('sentiment.publicService.notifyOff')}</span>
+                  <span>{t('sentiment.publicService.searchEnhance')}: {c.enableSearch ? t('common.on') : t('common.off')}</span>
+                  {c.lastConnectedAt && <span>{t('sentiment.publicService.lastConn')}: {new Date(c.lastConnectedAt).toLocaleTimeString()}</span>}
                 </div>
               )}
 
@@ -989,11 +996,11 @@ function PublicServiceConfigPanel() {
                 <div className="px-3 pb-3 space-y-3">
                   <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 space-y-3">
                     <div>
-                      <label className="text-sm text-slate-400 block mb-1">服务器地址</label>
+                      <label className="text-sm text-slate-400 block mb-1">{t('sentiment.publicService.serverUrl')}</label>
                       <input className="input-field bg-slate-800/60 text-slate-500 cursor-not-allowed" value={editUrl} readOnly />
                     </div>
                     <div>
-                      <label className="text-sm text-slate-400 block mb-1">API 认证令牌</label>
+                      <label className="text-sm text-slate-400 block mb-1">{t('sentiment.publicService.apiAuthToken')}</label>
                       <div className="relative">
                         <input className="input-field pr-10" type={showEditToken ? 'text' : 'password'} value={editToken} onChange={(e) => setEditToken(e.target.value)} />
                         <button className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-300" onClick={() => setShowEditToken(!showEditToken)}>
@@ -1003,9 +1010,9 @@ function PublicServiceConfigPanel() {
                     </div>
                     <div className="flex gap-2">
                       <button className="btn-primary text-sm" onClick={handleSaveEdit} disabled={saving || !editUrl.trim() || !editToken.trim()}>
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : '保存'}
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t('common.save')}
                       </button>
-                      <button className="btn-secondary text-sm" onClick={() => setEditingId(null)}>取消</button>
+                      <button className="btn-secondary text-sm" onClick={() => setEditingId(null)}>{t('common.cancel')}</button>
                     </div>
                   </div>
                 </div>
@@ -1018,38 +1025,38 @@ function PublicServiceConfigPanel() {
       {/* ── 偏好设置面板 ── */}
       {showPrefs && activeConfig && (
         <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 space-y-5">
-          <h4 className="text-sm font-semibold text-slate-300">⚙️ 偏好设置</h4>
+          <h4 className="text-sm font-semibold text-slate-300">{t('sentiment.publicService.prefsTitle')}</h4>
 
           {/* 通知同步 */}
           <div>
             <label className="flex items-center gap-2 text-sm text-slate-500 mb-2 cursor-pointer">
               <input type="checkbox" checked={notifyEnabled} onChange={(e) => setNotifyEnabled(e.target.checked)} className="rounded" />
-              📱 简报同步到社交工具 (Telegram / WhatsApp)
+              {t('sentiment.publicService.syncSocialLabel')}
             </label>
             {notifyEnabled && (
               <div className="pl-5 space-y-3">
                 <div className="space-y-1.5">
-                  <p className="text-sm text-slate-600">推送级别:</p>
+                  <p className="text-sm text-slate-600">{t('sentiment.publicService.pushLevel')}</p>
                   {ALERT_LEVEL_OPTIONS.map(opt => (
                     <label key={opt.value} className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
                       <input type="checkbox" checked={notifyLevels.includes(opt.value)} onChange={() => toggleNotifyLevel(opt.value)} className="rounded" />
-                      <span>{opt.emoji} {opt.label}</span>
-                      <span className="text-sm text-slate-600">— {opt.desc}</span>
+                      <span>{opt.emoji} {t(opt.labelKey)}</span>
+                      <span className="text-sm text-slate-600">— {t(opt.descKey)}</span>
                     </label>
                   ))}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-600">静默时段:</span>
+                  <span className="text-sm text-slate-600">{t('sentiment.publicService.quietHours')}</span>
                   <input type="time" value={quietStart} onChange={(e) => setQuietStart(e.target.value)} className="input-field w-24 text-sm" />
                   <span className="text-slate-600">~</span>
                   <input type="time" value={quietEnd} onChange={(e) => setQuietEnd(e.target.value)} className="input-field w-24 text-sm" />
-                  <span className="text-sm text-slate-600">此时段不推送</span>
+                  <span className="text-sm text-slate-600">{t('sentiment.publicService.quietHoursNote')}</span>
                 </div>
                 <div>
-                  <span className="text-sm text-slate-600 mr-2">简报格式:</span>
+                  <span className="text-sm text-slate-600 mr-2">{t('sentiment.publicService.briefingFormat')}</span>
                   <select value={briefingFormat} onChange={(e) => setBriefingFormat(e.target.value as BriefingFormat)} className="input-field w-32 text-sm">
-                    <option value="compact">精简版 — 关键指标</option>
-                    <option value="full">完整版 — 全部详情</option>
+                    <option value="compact">{t('sentiment.publicService.formatCompact')}</option>
+                    <option value="full">{t('sentiment.publicService.formatFull')}</option>
                   </select>
                 </div>
               </div>
@@ -1060,15 +1067,15 @@ function PublicServiceConfigPanel() {
           <div>
             <label className="flex items-center gap-2 text-sm text-slate-500 cursor-pointer">
               <input type="checkbox" checked={enableSearch} onChange={(e) => setEnableSearch(e.target.checked)} className="rounded" />
-              ⚡ 搜索增强 <span className="text-sm text-slate-600">(Perplexity 联网搜索，额外消耗 1 Token/次)</span>
+              {t('sentiment.publicService.searchEnhanceLabel')} <span className="text-sm text-slate-600">{t('sentiment.publicService.searchEnhanceDesc')}</span>
             </label>
           </div>
 
           <div className="flex gap-2 pt-1">
             <button className="btn-primary text-sm" onClick={handleSavePrefs} disabled={saving}>
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : '保存偏好'}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t('sentiment.publicService.savePrefs')}
             </button>
-            <button className="btn-secondary text-sm" onClick={() => setShowPrefs(false)}>取消</button>
+            <button className="btn-secondary text-sm" onClick={() => setShowPrefs(false)}>{t('common.cancel')}</button>
           </div>
         </div>
       )}
@@ -1083,15 +1090,16 @@ function PublicServiceConfigPanel() {
 
 // ==================== 子组件: 简报列表 ====================
 function BriefingList({ briefings }: { briefings: ScanBriefing[] }) {
+  const { t } = useTranslation();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   return (
     <div className="space-y-2">
       <p className="text-sm text-slate-500 font-medium flex items-center gap-1">
-        <Clock className="w-3 h-3" /> 最近简报 ({briefings.length})
+        <Clock className="w-3 h-3" /> {t('sentiment.briefing.recentBriefings')} ({briefings.length})
       </p>
       {briefings.map((b) => {
         const isExpanded = expandedId === b.briefingId;
-        const time = new Date(b.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const time = new Date(b.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         const hasCritical = b.alerts.some(a => a.level === 'critical');
         return (
           <div key={b.briefingId} className={`rounded-xl border overflow-hidden ${hasCritical ? 'border-red-500/30' : 'border-slate-800'}`}>
@@ -1101,13 +1109,13 @@ function BriefingList({ briefings }: { briefings: ScanBriefing[] }) {
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="text-sm text-slate-600">{time}</span>
-                <span className="text-sm px-1.5 py-0.5 rounded bg-cyan-600/10 text-cyan-400">{b.mode === 'public-service' ? '公共' : '自建'}</span>
-                <span className="text-sm truncate">{b.marketSummary ? b.marketSummary.slice(0, 60) + '...' : '无摘要'}</span>
+                <span className="text-sm px-1.5 py-0.5 rounded bg-cyan-600/10 text-cyan-400">{b.mode === 'public-service' ? t('sentiment.briefing.public') : t('sentiment.briefing.selfHosted')}</span>
+                <span className="text-sm truncate">{b.marketSummary ? b.marketSummary.slice(0, 60) + '...' : t('sentiment.briefing.noSummary')}</span>
               </div>
               <div className="flex items-center gap-2 shrink-0 ml-2">
-                <span className="text-sm text-slate-500">{b.triggeredSignals.length} 信号</span>
-                {b.alerts.length > 0 && <span className="text-sm text-amber-400">{b.alerts.length} 预警</span>}
-                {b.notified && <span className="text-sm text-emerald-500">✓ 已推送</span>}
+                <span className="text-sm text-slate-500">{b.triggeredSignals.length} {t('sentiment.briefing.signals')}</span>
+                {b.alerts.length > 0 && <span className="text-sm text-amber-400">{b.alerts.length} {t('sentiment.briefing.alerts')}</span>}
+                {b.notified && <span className="text-sm text-emerald-500">{t('sentiment.briefing.notified')}</span>}
                 {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-500" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-500" />}
               </div>
             </button>
@@ -1118,7 +1126,7 @@ function BriefingList({ briefings }: { briefings: ScanBriefing[] }) {
                 )}
                 {b.triggeredSignals.length > 0 && (
                   <div>
-                    <p className="text-sm text-slate-500 mb-1">触发信号:</p>
+                    <p className="text-sm text-slate-500 mb-1">{t('sentiment.briefing.triggeredSignals')}</p>
                     <div className="space-y-1">
                       {b.triggeredSignals.slice(0, 8).map((s, i) => (
                         <div key={i} className="flex items-center gap-2 text-sm">
@@ -1128,13 +1136,13 @@ function BriefingList({ briefings }: { briefings: ScanBriefing[] }) {
                           <span className={`tabular-nums ${s.impact > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{s.impact > 0 ? '+' : ''}{s.impact}</span>
                         </div>
                       ))}
-                      {b.triggeredSignals.length > 8 && <p className="text-sm text-slate-600">...还有 {b.triggeredSignals.length - 8} 条</p>}
+                      {b.triggeredSignals.length > 8 && <p className="text-sm text-slate-600">{t('sentiment.briefing.moreSignals', { count: b.triggeredSignals.length - 8 })}</p>}
                     </div>
                   </div>
                 )}
                 {b.alerts.length > 0 && (
                   <div>
-                    <p className="text-sm text-slate-500 mb-1">预警:</p>
+                    <p className="text-sm text-slate-500 mb-1">{t('sentiment.briefing.alertsLabel')}</p>
                     {b.alerts.map((a, i) => (
                       <div key={i} className="flex items-center gap-2 text-sm">
                         <span>{a.level === 'critical' ? '🔴' : a.level === 'warning' ? '🟡' : '🔵'}</span>
@@ -1144,9 +1152,9 @@ function BriefingList({ briefings }: { briefings: ScanBriefing[] }) {
                   </div>
                 )}
                 <div className="flex items-center gap-3 text-sm text-slate-600">
-                  <span>管线: {b.pipelineInfo.hasSearcher ? '搜索+分析' : '仅分析'}</span>
-                  <span>分析: {b.pipelineInfo.analyzerProvider}</span>
-                  <span>接收: {new Date(b.receivedAt).toLocaleString('zh-CN')}</span>
+                  <span>{t('sentiment.briefing.pipeline')}: {b.pipelineInfo.hasSearcher ? t('sentiment.briefing.pipelineSearchAnalyze') : t('sentiment.briefing.pipelineAnalyzeOnly')}</span>
+                  <span>{t('sentiment.briefing.analyze')}: {b.pipelineInfo.analyzerProvider}</span>
+                  <span>{t('sentiment.briefing.received')}: {new Date(b.receivedAt).toLocaleString()}</span>
                 </div>
               </div>
             )}
@@ -1159,6 +1167,7 @@ function BriefingList({ briefings }: { briefings: ScanBriefing[] }) {
 
 // ==================== 子组件: 管线配置面板 (双模式切换) ====================
 function PipelineConfigPanel({ scanMode, onModeChange }: { scanMode: ScanMode; onModeChange: (m: ScanMode) => void }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-4">
       {/* 模式切换 */}
@@ -1172,8 +1181,8 @@ function PipelineConfigPanel({ scanMode, onModeChange }: { scanMode: ScanMode; o
           onClick={() => onModeChange('public-service')}
         >
           <Globe className={`w-6 h-6 ${scanMode === 'public-service' ? 'text-cyan-400' : 'text-slate-500'}`} />
-          <span className={`text-lg font-bold tracking-tight ${scanMode === 'public-service' ? 'text-cyan-300' : 'text-slate-400'}`}>公共服务</span>
-          <span className={`text-sm ${scanMode === 'public-service' ? 'text-cyan-400/60' : 'text-slate-600'}`}>接收推送简报</span>
+          <span className={`text-lg font-bold tracking-tight ${scanMode === 'public-service' ? 'text-cyan-300' : 'text-slate-400'}`}>{t('sentiment.pipeline.publicService')}</span>
+          <span className={`text-sm ${scanMode === 'public-service' ? 'text-cyan-400/60' : 'text-slate-600'}`}>{t('sentiment.pipeline.publicServiceDesc')}</span>
         </button>
         <button
           className="flex flex-col items-center justify-center gap-1.5 py-5 px-4 rounded-xl transition-all duration-200"
@@ -1184,8 +1193,8 @@ function PipelineConfigPanel({ scanMode, onModeChange }: { scanMode: ScanMode; o
           onClick={() => onModeChange('self-hosted')}
         >
           <Settings2 className={`w-6 h-6 ${scanMode === 'self-hosted' ? 'text-purple-400' : 'text-slate-500'}`} />
-          <span className={`text-lg font-bold tracking-tight ${scanMode === 'self-hosted' ? 'text-purple-300' : 'text-slate-400'}`}>自建模式</span>
-          <span className={`text-sm ${scanMode === 'self-hosted' ? 'text-purple-400/60' : 'text-slate-600'}`}>自己配置 API Key</span>
+          <span className={`text-lg font-bold tracking-tight ${scanMode === 'self-hosted' ? 'text-purple-300' : 'text-slate-400'}`}>{t('sentiment.pipeline.selfHosted')}</span>
+          <span className={`text-sm ${scanMode === 'self-hosted' ? 'text-purple-400/60' : 'text-slate-600'}`}>{t('sentiment.pipeline.selfHostedDesc')}</span>
         </button>
       </div>
 
@@ -1197,13 +1206,14 @@ function PipelineConfigPanel({ scanMode, onModeChange }: { scanMode: ScanMode; o
 
 // ==================== 子组件: 评分仪表盘 ====================
 function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions }: { scores: ScoringResult | null; gridParams: GridAutoParams | null; marketSummary: string; tradeSuggestions: TradeSuggestion[] }) {
+  const { t } = useTranslation();
   const sdColor = (v: number) => v > 20 ? 'text-emerald-400' : v < -20 ? 'text-red-400' : 'text-yellow-400';
   const svColor = (v: number) => v > 70 ? 'text-red-400' : v > 30 ? 'text-yellow-400' : 'text-emerald-400';
   const srColor = (v: number) => v > 85 ? 'text-red-500 animate-pulse' : v > 60 ? 'text-red-400' : v > 30 ? 'text-yellow-400' : 'text-emerald-400';
 
-  const sdLabel = (v: number) => v > 40 ? '强烈看多' : v > 20 ? '偏多' : v < -40 ? '强烈看空' : v < -20 ? '偏空' : '中性';
-  const svLabel = (v: number) => v > 70 ? '高波动' : v > 30 ? '中波动' : '低波动';
-  const srLabel = (v: number) => v > 85 ? '🚨 熔断' : v > 60 ? '高风险' : v > 30 ? '中风险' : '低风险';
+  const sdLabel = (v: number) => v > 40 ? t('sentiment.scoring.sdLabel.strongBull') : v > 20 ? t('sentiment.scoring.sdLabel.bull') : v < -40 ? t('sentiment.scoring.sdLabel.strongBear') : v < -20 ? t('sentiment.scoring.sdLabel.bear') : t('sentiment.scoring.sdLabel.neutral');
+  const svLabel = (v: number) => v > 70 ? t('sentiment.scoring.svLabel.high') : v > 30 ? t('sentiment.scoring.svLabel.mid') : t('sentiment.scoring.svLabel.low');
+  const srLabel = (v: number) => v > 85 ? t('sentiment.scoring.srLabel.circuitBreak') : v > 60 ? t('sentiment.scoring.srLabel.high') : v > 30 ? t('sentiment.scoring.srLabel.mid') : t('sentiment.scoring.srLabel.low');
 
   const barWidth = (v: number, max: number) => `${Math.min(100, Math.max(0, ((v + max) / (max * 2)) * 100))}%`;
   const absBarWidth = (v: number) => `${Math.min(100, Math.max(0, v))}%`;
@@ -1212,28 +1222,28 @@ function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions 
     <div className="card space-y-4">
       <h3 className="text-lg font-semibold flex items-center gap-2">
         <Gauge className="w-5 h-5 text-cyan-400" />
-        Sentinel-X 实时评分
-        {scores && <span className="text-sm text-slate-500 font-normal ml-2">活跃信号: {scores.activeSignals}</span>}
+        {t('sentiment.scoring.title')}
+        {scores && <span className="text-sm text-slate-500 font-normal ml-2">{t('sentiment.scoring.activeSignals', { count: scores.activeSignals })}</span>}
       </h3>
 
       <details className="group">
         <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-400 transition-colors flex items-center gap-1 select-none">
           <ChevronDown className="w-3 h-3 group-open:rotate-180 transition-transform" />
-          评分原理说明
+          {t('sentiment.scoring.scoringExplain')}
         </summary>
         <div className="mt-2 p-3 rounded-lg bg-slate-800/30 border border-slate-700/20 text-xs text-slate-400 space-y-1.5">
-          <p><strong className="text-slate-300">数据来源：</strong>评分基于「扫描信号」触发的信号事件，而非 300 个信号定义本身。每次扫描时 LLM 分析当前市场新闻，从 300 个预定义信号中识别出实际触发的事件。</p>
-          <p><strong className="text-slate-300">计算方式：</strong>对所有已触发且未过期的信号事件，按 <span className="text-cyan-400">影响力 × 置信度 × 时间衰减因子</span> 加权求和，分别汇入 D(方向)、V(波动)、R(风险) 三个维度，最终压缩为 SD/SV/SR 三个评分。评分计算在本地完成，不消耗 Token。</p>
-          <p><strong className="text-slate-300">时间衰减：</strong>每个信号有独立的半衰期（数小时至数天），触发后影响力随时间指数衰减，衰减至 1% 以下自动忽略。因此即使不重新扫描，评分也会随时间自然变化。</p>
-          <p className="text-amber-400/80 flex items-center gap-1">💡 <strong>提高扫描频率可以显著提升评分准确性</strong> — 更频繁地扫描 300 信号能捕捉到更多最新市场变化，使评分数据更全面、更及时，减少信息盲区。建议根据市场活跃程度适当增加扫描频率。</p>
+          <p><strong className="text-slate-300">{t('sentiment.scoring.dataSource')}</strong>{t('sentiment.scoring.dataSourceDesc')}</p>
+          <p><strong className="text-slate-300">{t('sentiment.scoring.calcMethod')}</strong>{t('sentiment.scoring.calcMethodDesc')}</p>
+          <p><strong className="text-slate-300">{t('sentiment.scoring.timeDecay')}</strong>{t('sentiment.scoring.timeDecayDesc')}</p>
+          <p className="text-amber-400/80 flex items-center gap-1">💡 <strong>{t('sentiment.scoring.scanTip')}</strong> — {t('sentiment.scoring.scanTipDesc')}</p>
         </div>
       </details>
 
       {!scores ? (
         <div className="p-8 text-center text-slate-500">
           <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm">暂无评分数据</p>
-          <p className="text-sm mt-1">点击「扫描信号」开始分析</p>
+          <p className="text-sm">{t('sentiment.scoring.noScoreData')}</p>
+          <p className="text-sm mt-1">{t('sentiment.scoring.startScan')}</p>
         </div>
       ) : (
         <>
@@ -1243,11 +1253,11 @@ function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions 
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-slate-500 flex items-center gap-1">
                   {scores.scoreDirection > 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                  SD 方向分
+                  {t('sentiment.scoring.sdTitle')}
                 </span>
                 <span className={`text-sm font-medium ${sdColor(scores.scoreDirection)}`}>{sdLabel(scores.scoreDirection)}</span>
               </div>
-              <p className="text-xs text-slate-600 mb-1">综合所有方向类(D)信号的加权得分，反映市场多空力量对比。正值看多、负值看空，经 tanh 压缩至 [-100, +100]</p>
+              <p className="text-xs text-slate-600 mb-1">{t('sentiment.scoring.sdDesc')}</p>
               <p className={`text-3xl font-bold tabular-nums ${sdColor(scores.scoreDirection)}`}>
                 {scores.scoreDirection > 0 ? '+' : ''}{scores.scoreDirection.toFixed(1)}
               </p>
@@ -1262,10 +1272,10 @@ function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions 
             {/* SV 波动分 */}
             <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/30">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-slate-500 flex items-center gap-1"><Activity className="w-3.5 h-3.5" /> SV 波动分</span>
+                <span className="text-sm text-slate-500 flex items-center gap-1"><Activity className="w-3.5 h-3.5" /> {t('sentiment.scoring.svTitle')}</span>
                 <span className={`text-sm font-medium ${svColor(scores.scoreVolatility)}`}>{svLabel(scores.scoreVolatility)}</span>
               </div>
-              <p className="text-xs text-slate-600 mb-1">综合所有波动类(V)信号的绝对值，衡量市场波动预期。&lt;30 低波动适合窄幅网格，&gt;70 高波动需加大间距防御</p>
+              <p className="text-xs text-slate-600 mb-1">{t('sentiment.scoring.svDesc')}</p>
               <p className={`text-3xl font-bold tabular-nums ${svColor(scores.scoreVolatility)}`}>
                 {scores.scoreVolatility.toFixed(1)}
               </p>
@@ -1279,10 +1289,10 @@ function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions 
             {/* SR 风险分 */}
             <div className={`p-4 rounded-xl border ${scores.scoreRisk > 85 ? 'bg-red-900/20 border-red-500/50' : 'bg-slate-800/40 border-slate-700/30'}`}>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-slate-500 flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> SR 风险分</span>
+                <span className="text-sm text-slate-500 flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> {t('sentiment.scoring.srTitle')}</span>
                 <span className={`text-sm font-medium ${srColor(scores.scoreRisk)}`}>{srLabel(scores.scoreRisk)}</span>
               </div>
-              <p className="text-xs text-slate-600 mb-1">综合所有风险类(R)信号的绝对值，衡量黑天鹅/系统性风险。&gt;60 高风险应减仓，&gt;85 触发熔断自动停止交易</p>
+              <p className="text-xs text-slate-600 mb-1">{t('sentiment.scoring.srDesc')}</p>
               <p className={`text-3xl font-bold tabular-nums ${srColor(scores.scoreRisk)}`}>
                 {scores.scoreRisk.toFixed(1)}
               </p>
@@ -1300,24 +1310,24 @@ function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions 
             <div className="p-4 rounded-xl bg-slate-800/30 border border-slate-700/30">
               <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
                 <Zap className="w-4 h-4 text-amber-400" />
-                网格调参建议
-                {gridParams.circuitBreak && <span className="text-sm px-2 py-0.5 rounded-full bg-red-600/20 text-red-400 animate-pulse">🚨 熔断触发 — KILL ALL</span>}
+                {t('sentiment.scoring.gridParams')}
+                {gridParams.circuitBreak && <span className="text-sm px-2 py-0.5 rounded-full bg-red-600/20 text-red-400 animate-pulse">{t('sentiment.scoring.circuitBreakKill')}</span>}
               </h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="p-3 rounded-lg bg-slate-800/60">
-                  <p className="text-sm text-slate-500 mb-1">间距策略</p>
+                  <p className="text-sm text-slate-500 mb-1">{t('sentiment.scoring.spacingStrategy')}</p>
                   <p className="text-lg font-bold text-white">{gridParams.spacing}%</p>
-                  <p className="text-sm text-slate-400">{gridParams.spacingMode === 'narrow' ? '窄幅收割' : gridParams.spacingMode === 'standard' ? '标准模式' : '防御宽幅'}</p>
+                  <p className="text-sm text-slate-400">{gridParams.spacingMode === 'narrow' ? t('sentiment.scoring.spacingNarrow') : gridParams.spacingMode === 'standard' ? t('sentiment.scoring.spacingStandard') : t('sentiment.scoring.spacingWide')}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-800/60">
-                  <p className="text-sm text-slate-500 mb-1">倾斜策略</p>
+                  <p className="text-sm text-slate-500 mb-1">{t('sentiment.scoring.skewStrategy')}</p>
                   <p className={`text-lg font-bold ${gridParams.skewMode === 'bullish' ? 'text-emerald-400' : gridParams.skewMode === 'bearish' ? 'text-red-400' : 'text-yellow-400'}`}>
-                    {gridParams.skewMode === 'bullish' ? '看涨网格' : gridParams.skewMode === 'bearish' ? '看跌网格' : '中性网格'}
+                    {gridParams.skewMode === 'bullish' ? t('sentiment.scoring.skewBullish') : gridParams.skewMode === 'bearish' ? t('sentiment.scoring.skewBearish') : t('sentiment.scoring.skewNeutral')}
                   </p>
-                  <p className="text-sm text-slate-400">买{Math.round(gridParams.buyRatio * 100)}% / 卖{Math.round(gridParams.sellRatio * 100)}%</p>
+                  <p className="text-sm text-slate-400">{t('sentiment.scoring.buyPercent', { pct: Math.round(gridParams.buyRatio * 100) })} / {t('sentiment.scoring.sellPercent', { pct: Math.round(gridParams.sellRatio * 100) })}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-800/60">
-                  <p className="text-sm text-slate-500 mb-1">买单比例</p>
+                  <p className="text-sm text-slate-500 mb-1">{t('sentiment.scoring.buyRatio')}</p>
                   <div className="flex items-end gap-1">
                     <p className="text-lg font-bold text-emerald-400">{Math.round(gridParams.buyRatio * 100)}%</p>
                   </div>
@@ -1326,7 +1336,7 @@ function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions 
                   </div>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-800/60">
-                  <p className="text-sm text-slate-500 mb-1">卖单比例</p>
+                  <p className="text-sm text-slate-500 mb-1">{t('sentiment.scoring.sellRatio')}</p>
                   <div className="flex items-end gap-1">
                     <p className="text-lg font-bold text-red-400">{Math.round(gridParams.sellRatio * 100)}%</p>
                   </div>
@@ -1343,8 +1353,8 @@ function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions 
             <div className="p-4 rounded-xl bg-slate-800/30 border border-slate-700/30">
               <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
                 <TrendingUp className="w-4 h-4 text-cyan-400" />
-                AI 交易建议
-                <span className="text-xs text-slate-500 font-normal">基于技术锚点 · 经风控校验</span>
+                {t('sentiment.scoring.tradeSuggestions')}
+                <span className="text-xs text-slate-500 font-normal">{t('sentiment.scoring.tradeSuggestionsDesc')}</span>
               </h4>
               <div className="space-y-3">
                 {tradeSuggestions.map((s: TradeSuggestion, i: number) => {
@@ -1364,28 +1374,28 @@ function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions 
                           <span className="text-xs text-slate-500">{s.timeframe}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-400">信心 {(s.confidence * 100).toFixed(0)}%</span>
+                          <span className="text-xs text-slate-400">{t('sentiment.scoring.confidence')} {(s.confidence * 100).toFixed(0)}%</span>
                           <span className="text-xs text-slate-500">R:R {rrRatio}</span>
                         </div>
                       </div>
                       <div className="grid grid-cols-3 gap-2 mb-2">
                         <div className="text-center p-1.5 rounded bg-slate-800/60">
-                          <p className="text-xs text-slate-500">入场</p>
+                          <p className="text-xs text-slate-500">{t('sentiment.scoring.entry')}</p>
                           <p className="text-sm font-mono font-semibold text-white">${s.entryPrice.toLocaleString()}</p>
                         </div>
                         <div className="text-center p-1.5 rounded bg-slate-800/60">
-                          <p className="text-xs text-emerald-500">目标</p>
+                          <p className="text-xs text-emerald-500">{t('sentiment.scoring.target')}</p>
                           <p className="text-sm font-mono font-semibold text-emerald-400">${s.targetPrice.toLocaleString()}</p>
                           <p className="text-xs text-emerald-500/70">{pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%</p>
                         </div>
                         <div className="text-center p-1.5 rounded bg-slate-800/60">
-                          <p className="text-xs text-red-500">止损</p>
+                          <p className="text-xs text-red-500">{t('sentiment.scoring.stopLoss')}</p>
                           <p className="text-sm font-mono font-semibold text-red-400">${s.stopLoss.toLocaleString()}</p>
                         </div>
                       </div>
                       <p className="text-xs text-slate-400 leading-relaxed">{s.reasoning}</p>
                       {s.anchorSource && (
-                        <p className="text-xs text-cyan-500/60 mt-1">📐 锚点: {s.anchorSource}</p>
+                        <p className="text-xs text-cyan-500/60 mt-1">{t('sentiment.scoring.anchor')}: {s.anchorSource}</p>
                       )}
                     </div>
                   );
@@ -1399,15 +1409,15 @@ function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions 
             <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/15">
               <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
                 <RefreshCw className="w-4 h-4 text-cyan-400" />
-                市场综合分析
-                <span className="text-xs text-slate-500 font-normal ml-auto">扫描于 {new Date(scores.timestamp).toLocaleString('zh-CN')}</span>
+                {t('sentiment.scoring.marketAnalysis')}
+                <span className="text-xs text-slate-500 font-normal ml-auto">{t('sentiment.scoring.scannedAt', { time: new Date(scores.timestamp).toLocaleString() })}</span>
               </h4>
               <p className="text-sm text-slate-300 leading-relaxed">{marketSummary}</p>
             </div>
           )}
 
           <p className="text-sm text-slate-600 text-right">
-            评分时间: {new Date(scores.timestamp).toLocaleString('zh-CN')}
+            {t('sentiment.scoring.scoreTime')}: {new Date(scores.timestamp).toLocaleString()}
           </p>
         </>
       )}
@@ -1417,6 +1427,7 @@ function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions 
 
 // ==================== 子组件: 信号矩阵管理 ====================
 function SignalMatrixPanel({ onScan, analyzing, progress }: { onScan: () => void; analyzing: boolean; progress: PipelineProgress | null }) {
+  const { t } = useTranslation();
   const signalDefs = useLiveQuery(() => db.signalDefinitions.orderBy('signalId').toArray(), []);
   const llmConfigs = useLiveQuery(() => db.llmConfigs.filter(c => c.enabled).toArray(), []);
   const [expandedGroup, setExpandedGroup] = useState<SignalGroup | null>(null);
@@ -1446,7 +1457,7 @@ function SignalMatrixPanel({ onScan, analyzing, progress }: { onScan: () => void
   };
 
   const handleResetDefaults = async () => {
-    if (!confirm('确定重置为300条默认信号？当前所有自定义修改将被覆盖。')) return;
+    if (!confirm(t('sentiment.signalMatrix.resetConfirm'))) return;
     await db.signalDefinitions.clear();
     const items: Omit<SignalDefinition, 'id'>[] = SIGNAL_MATRIX.map(s => ({ ...s, enabled: true }));
     await db.signalDefinitions.bulkAdd(items as SignalDefinition[]);
@@ -1470,9 +1481,9 @@ function SignalMatrixPanel({ onScan, analyzing, progress }: { onScan: () => void
 
   const catBadge = (cat: string) => {
     switch (cat) {
-      case 'D': return <span className="text-sm px-1.5 py-0.5 rounded bg-blue-600/15 text-blue-400 border border-blue-500/20">D方向</span>;
-      case 'V': return <span className="text-sm px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-400 border border-amber-500/20">V波动</span>;
-      case 'R': return <span className="text-sm px-1.5 py-0.5 rounded bg-red-600/15 text-red-400 border border-red-500/20">R风险</span>;
+      case 'D': return <span className="text-sm px-1.5 py-0.5 rounded bg-blue-600/15 text-blue-400 border border-blue-500/20">{t('sentiment.signalMatrix.catD')}</span>;
+      case 'V': return <span className="text-sm px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-400 border border-amber-500/20">{t('sentiment.signalMatrix.catV')}</span>;
+      case 'R': return <span className="text-sm px-1.5 py-0.5 rounded bg-red-600/15 text-red-400 border border-red-500/20">{t('sentiment.signalMatrix.catR')}</span>;
       default: return null;
     }
   };
@@ -1483,29 +1494,29 @@ function SignalMatrixPanel({ onScan, analyzing, progress }: { onScan: () => void
         <button className="flex items-center gap-2 text-left" onClick={() => setPanelExpanded(!panelExpanded)}>
           <h3 className="text-lg font-semibold flex items-center gap-2">
             <Activity className="w-5 h-5 text-blue-400" />
-            信号矩阵
-            <span className="text-sm text-slate-500 font-normal">({enabledCount}/{totalCount} 启用)</span>
+            {t('sentiment.signalMatrix.title')}
+            <span className="text-sm text-slate-500 font-normal">{t('sentiment.signalMatrix.enabledCount', { enabled: enabledCount, total: totalCount })}</span>
           </h3>
           {panelExpanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
         </button>
         <div className="flex items-center gap-2">
-          <button className="btn-secondary text-sm flex items-center gap-1" onClick={handleResetDefaults} title="重置为默认300条信号">
-            <RefreshCw className="w-3.5 h-3.5" /> 重置默认
+          <button className="btn-secondary text-sm flex items-center gap-1" onClick={handleResetDefaults} title={t('sentiment.signalMatrix.resetConfirm')}>
+            <RefreshCw className="w-3.5 h-3.5" /> {t('sentiment.signalMatrix.resetDefault')}
           </button>
           <button
             className={`btn-primary text-sm flex items-center gap-2 ${analyzing ? 'opacity-80 cursor-not-allowed' : ''}`}
             onClick={onScan}
             disabled={!hasLLM || enabledCount === 0 || analyzing}
-            title={analyzing ? '扫描进行中，请等待完成' : !hasLLM ? '请先配置 LLM' : enabledCount === 0 ? '请启用信号' : '扫描信号'}
+            title={analyzing ? t('sentiment.signalMatrix.scanTitle.scanning') : !hasLLM ? t('sentiment.signalMatrix.scanTitle.noLLM') : enabledCount === 0 ? t('sentiment.signalMatrix.scanTitle.noSignals') : t('sentiment.signalMatrix.scanTitle.ready')}
           >
             {analyzing ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                {progress ? progress.label : '扫描中...'}
+                {progress ? progress.label : t('sentiment.signalMatrix.scanningProgress')}
               </>
             ) : (
               <>
-                <Play className="w-4 h-4" /> 扫描信号 ({enabledCount})
+                <Play className="w-4 h-4" /> {t('sentiment.signalMatrix.scanSignals')} ({enabledCount})
               </>
             )}
           </button>
@@ -1514,13 +1525,13 @@ function SignalMatrixPanel({ onScan, analyzing, progress }: { onScan: () => void
 
       {panelExpanded && (<>
       <p className="text-sm text-slate-500">
-        300条信号按10个组分类，覆盖宏观流动性、央行政策、监管合规、机构资金流、链上行为、市场结构、情绪指标、叙事赛道、黑天鹅安全、关键人物地缘。每条信号预设权重(Impact)、半衰期(HalfLife)和归类(D方向/V波动/R风险)。
+        {t('sentiment.signalMatrix.matrixDesc')}
       </p>
 
       {/* 搜索 */}
       <input
         className="input-field text-sm"
-        placeholder="搜索信号名称、条件或编号..."
+        placeholder={t('sentiment.signalMatrix.searchPlaceholder')}
         value={searchText}
         onChange={(e) => setSearchText(e.target.value)}
       />
@@ -1553,8 +1564,8 @@ function SignalMatrixPanel({ onScan, analyzing, progress }: { onScan: () => void
                   <div className="flex items-center justify-between pb-2 border-b border-slate-800/50">
                     <p className="text-sm text-slate-500">{groupCfg.description}</p>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <button className="text-sm px-2 py-0.5 rounded bg-emerald-600/15 text-emerald-400 hover:bg-emerald-600/25" onClick={() => handleToggleGroup(groupCfg.id, true)}>全启</button>
-                      <button className="text-sm px-2 py-0.5 rounded bg-slate-700 text-slate-400 hover:bg-slate-600" onClick={() => handleToggleGroup(groupCfg.id, false)}>全禁</button>
+                      <button className="text-sm px-2 py-0.5 rounded bg-emerald-600/15 text-emerald-400 hover:bg-emerald-600/25" onClick={() => handleToggleGroup(groupCfg.id, true)}>{t('sentiment.signalMatrix.enableAll')}</button>
+                      <button className="text-sm px-2 py-0.5 rounded bg-slate-700 text-slate-400 hover:bg-slate-600" onClick={() => handleToggleGroup(groupCfg.id, false)}>{t('sentiment.signalMatrix.disableAll')}</button>
                     </div>
                   </div>
                   {(searchText ? items : allItems).map((sig) => (
@@ -1582,6 +1593,7 @@ function SignalMatrixPanel({ onScan, analyzing, progress }: { onScan: () => void
 
 // ==================== 子组件: 扫描记录 (按扫描批次分组) ====================
 function SignalEventHistory() {
+  const { t } = useTranslation();
   const events = useLiveQuery(
     () => db.signalEvents.orderBy('triggeredAt').reverse().limit(200).toArray(),
     [],
@@ -1684,11 +1696,11 @@ function SignalEventHistory() {
       <div className="card">
         <h3 className="text-lg font-semibold flex items-center gap-2 mb-2">
           <Zap className="w-5 h-5 text-amber-400" />
-          扫描记录
+          {t('sentiment.scanHistory.title')}
         </h3>
         <div className="p-8 text-center text-slate-500">
-          <p className="text-sm">暂无扫描记录</p>
-          <p className="text-sm mt-1">点击「扫描信号」让 LLM 分析当前市场</p>
+          <p className="text-sm">{t('sentiment.scanHistory.noRecords')}</p>
+          <p className="text-sm mt-1">{t('sentiment.scanHistory.noRecordsDesc')}</p>
         </div>
       </div>
     );
@@ -1706,13 +1718,13 @@ function SignalEventHistory() {
         <div className="space-y-3 min-w-0">
           <h3 className="text-lg font-semibold flex items-center gap-2">
             <Zap className="w-5 h-5 text-amber-400" />
-            扫描记录
-            <span className="text-sm text-slate-500 font-normal ml-1">(最近 {scanRecords.length} 次)</span>
+            {t('sentiment.scanHistory.title')}
+            <span className="text-sm text-slate-500 font-normal ml-1">{t('sentiment.scanHistory.recentN', { count: scanRecords.length })}</span>
           </h3>
           <div className="space-y-2">
             {scanRecords.map((scan) => {
               const isExpanded = expandedScan === scan.timestamp;
-              const time = new Date(scan.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+              const time = new Date(scan.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
               return (
                 <div key={scan.timestamp} className={`rounded-xl border overflow-hidden ${
                   Math.abs(scan.netImpact) > 50 ? 'border-amber-500/20' : 'border-slate-800'
@@ -1730,8 +1742,8 @@ function SignalEventHistory() {
                         : <Activity className="w-4 h-4 text-slate-400 shrink-0" />
                       }
                       <span className="text-sm text-slate-600 shrink-0">{time}</span>
-                      {scan.isPublic && <span className="text-sm px-1 py-0.5 rounded bg-cyan-600/10 text-cyan-500 shrink-0">公共</span>}
-                      <span className="text-sm text-slate-300 shrink-0">{(scan.events || []).length} 个信号</span>
+                      {scan.isPublic && <span className="text-sm px-1 py-0.5 rounded bg-cyan-600/10 text-cyan-500 shrink-0">{t('sentiment.scanHistory.public')}</span>}
+                      <span className="text-sm text-slate-300 shrink-0">{t('sentiment.scanHistory.nSignals', { count: (scan.events || []).length })}</span>
                       {scan.serverTokenUsage && scan.serverTokenUsage.totalTokens > 0 ? (
                         <span className="text-sm px-1.5 py-0.5 rounded bg-purple-600/10 text-purple-400 shrink-0 tabular-nums">
                           🔤 {scan.serverTokenUsage.totalTokens.toLocaleString()} tok
@@ -1771,13 +1783,13 @@ function SignalEventHistory() {
                     <div className="border-t border-slate-800/50">
                       {scan.marketSummary && (
                         <div className="px-4 py-3 bg-blue-500/5 border-b border-slate-800/30">
-                          <p className="text-xs text-slate-500 font-medium mb-1 flex items-center gap-1">📊 市场综合分析</p>
+                          <p className="text-xs text-slate-500 font-medium mb-1 flex items-center gap-1">📊 {t('sentiment.scoring.marketAnalysis')}</p>
                           <p className="text-sm text-slate-300 leading-relaxed">{scan.marketSummary}</p>
                         </div>
                       )}
                       {scan.events.length === 0 && (
                         <div className="px-4 py-4 text-center text-slate-500">
-                          <p className="text-sm">🌊 本次扫描未触发任何信号 — 市场平静</p>
+                          <p className="text-sm">{t('sentiment.scanHistory.noSignalsTriggered')}</p>
                           {scan.scoreDirection !== undefined && (
                             <p className="text-sm mt-1 text-slate-600">
                               SD={scan.scoreDirection?.toFixed(1)} SV={scan.scoreVolatility?.toFixed(1)} SR={scan.scoreRisk?.toFixed(1)}
@@ -1808,23 +1820,23 @@ function SignalEventHistory() {
                       {/* Token 消耗 & 耗时详情 */}
                       {scan.isPublic && scan.serverTokenUsage && scan.serverTokenUsage.totalTokens > 0 ? (
                         <div className="px-4 py-3 bg-slate-800/20 border-t border-slate-700/30">
-                          <p className="text-sm text-slate-500 font-medium mb-2 flex items-center gap-1">🔤 服务端 Token 消耗</p>
+                          <p className="text-sm text-slate-500 font-medium mb-2 flex items-center gap-1">{t('sentiment.scanHistory.serverTokenUsage')}</p>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                             <div>
-                              <span className="text-slate-500">搜索 Token:</span>
+                              <span className="text-slate-500">{t('sentiment.scanHistory.searchToken')}</span>
                               <span className="ml-2 font-medium text-blue-400 tabular-nums">{scan.serverTokenUsage.searchTokens.toLocaleString()}</span>
                             </div>
                             <div>
-                              <span className="text-slate-500">分析 Token:</span>
+                              <span className="text-slate-500">{t('sentiment.scanHistory.analyzeToken')}</span>
                               <span className="ml-2 font-medium text-purple-400 tabular-nums">{scan.serverTokenUsage.analyzeTokens.toLocaleString()}</span>
                             </div>
                             <div>
-                              <span className="text-slate-500">总 Token:</span>
+                              <span className="text-slate-500">{t('sentiment.scanHistory.totalToken')}</span>
                               <span className="ml-2 font-semibold text-amber-400 tabular-nums">{scan.serverTokenUsage.totalTokens.toLocaleString()}</span>
                             </div>
                             {scan.startedAt && scan.completedAt && (
                               <div>
-                                <span className="text-slate-500">耗时:</span>
+                                <span className="text-slate-500">{t('sentiment.scanHistory.duration')}</span>
                                 <span className="ml-2 font-medium text-cyan-400 tabular-nums">
                                   {((new Date(scan.completedAt).getTime() - new Date(scan.startedAt).getTime()) / 1000).toFixed(1)}s
                                 </span>
@@ -1833,26 +1845,26 @@ function SignalEventHistory() {
                           </div>
                           {scan.startedAt && (
                             <div className="flex items-center gap-4 mt-2 text-xs text-slate-600">
-                              <span>开始: {new Date(scan.startedAt).toLocaleString('zh-CN')}</span>
-                              {scan.completedAt && <span>完成: {new Date(scan.completedAt).toLocaleString('zh-CN')}</span>}
+                              <span>{t('sentiment.scanHistory.started')}: {new Date(scan.startedAt).toLocaleString()}</span>
+                              {scan.completedAt && <span>{t('sentiment.scanHistory.completed')}: {new Date(scan.completedAt).toLocaleString()}</span>}
                             </div>
                           )}
                         </div>
                       ) : scan.tokenUsage && scan.tokenUsage.length > 0 ? (
                         <div className="px-4 py-3 bg-slate-800/20 border-t border-slate-700/30">
-                          <p className="text-sm text-slate-500 font-medium mb-2 flex items-center gap-1">🔤 Token 消耗明细</p>
+                          <p className="text-sm text-slate-500 font-medium mb-2 flex items-center gap-1">{t('sentiment.scanHistory.tokenDetail')}</p>
                           <div className="space-y-1.5">
                             {scan.tokenUsage.map((u: any, i: number) => (
                               <div key={i} className="flex items-center gap-3 text-sm">
-                                <span className="text-slate-400 font-medium w-24">{u.provider === 'perplexity' ? '🔍 搜索' : '🧠 分析'}</span>
+                                <span className="text-slate-400 font-medium w-24">{u.provider === 'perplexity' ? t('sentiment.scanHistory.searchRole') : t('sentiment.scanHistory.analyzeRole')}</span>
                                 <span className="text-slate-500">{u.provider}/{u.model}</span>
-                                <span className="text-slate-600 ml-auto tabular-nums">输入: <span className="text-blue-400">{u.promptTokens.toLocaleString()}</span></span>
-                                <span className="text-slate-600 tabular-nums">输出: <span className="text-purple-400">{u.completionTokens.toLocaleString()}</span></span>
-                                <span className="text-slate-400 font-bold tabular-nums">合计: {u.totalTokens.toLocaleString()}</span>
+                                <span className="text-slate-600 ml-auto tabular-nums">{t('sentiment.scanHistory.input')}: <span className="text-blue-400">{u.promptTokens.toLocaleString()}</span></span>
+                                <span className="text-slate-600 tabular-nums">{t('sentiment.scanHistory.output')}: <span className="text-purple-400">{u.completionTokens.toLocaleString()}</span></span>
+                                <span className="text-slate-400 font-bold tabular-nums">{t('sentiment.scanHistory.total')}: {u.totalTokens.toLocaleString()}</span>
                               </div>
                             ))}
                             <div className="flex items-center justify-between pt-1.5 border-t border-slate-700/30 text-sm">
-                              <span className="text-slate-500">总消耗</span>
+                              <span className="text-slate-500">{t('sentiment.scanHistory.totalUsage')}</span>
                               <span className="text-amber-400 font-bold tabular-nums">
                                 {scan.tokenUsage.reduce((s: number, u: any) => s + u.totalTokens, 0).toLocaleString()} tokens
                               </span>
@@ -1861,7 +1873,7 @@ function SignalEventHistory() {
                         </div>
                       ) : !scan.isPublic ? (
                         <div className="px-4 py-2 bg-slate-800/20 border-t border-slate-700/30">
-                          <p className="text-sm text-slate-600">💡 此次扫描未记录 Token 消耗（旧版扫描记录）</p>
+                          <p className="text-sm text-slate-600">{t('sentiment.scanHistory.oldScanNote')}</p>
                         </div>
                       ) : null}
                     </div>
@@ -1877,27 +1889,27 @@ function SignalEventHistory() {
           <div className="space-y-3 min-w-0">
             <h3 className="text-lg font-semibold flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-red-400" />
-              失败记录
-              <span className="text-sm text-red-400/60 font-normal ml-1">({scanFailures!.length} 条)</span>
+              {t('sentiment.scanHistory.failureTitle')}
+              <span className="text-sm text-red-400/60 font-normal ml-1">({scanFailures!.length})</span>
             </h3>
             <div className="space-y-2">
               {scanFailures!.map((f) => {
-                const time = new Date(f.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const time = new Date(f.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 const isToken = f.reason.includes('Token');
-                const isRateLimit = f.reason.includes('频率');
+                const isRateLimit = f.reason.includes('频率') || f.reason.includes('rate');
                 return (
                   <div key={f.id} className={`rounded-xl border p-3 ${isRateLimit ? 'border-amber-500/20 bg-amber-500/5' : 'border-red-500/20 bg-red-500/5'}`}>
                     <div className="flex items-center gap-2 flex-wrap">
                       <AlertTriangle className={`w-4 h-4 shrink-0 ${isRateLimit ? 'text-amber-400' : 'text-red-400'}`} />
                       <span className="text-sm text-slate-500 shrink-0">{time}</span>
                       <span className={`text-sm font-medium ${isRateLimit ? 'text-amber-400' : 'text-red-400'}`}>{f.reason}</span>
-                      {f.mode === 'public-service' && <span className="text-xs px-1 py-0.5 rounded bg-cyan-600/10 text-cyan-500">公共服务</span>}
+                      {f.mode === 'public-service' && <span className="text-xs px-1 py-0.5 rounded bg-cyan-600/10 text-cyan-500">{t('sentiment.scanHistory.publicService')}</span>}
                     </div>
                     <p className="text-sm mt-1.5 ml-6">
                       {isToken
-                        ? <span className="text-amber-400/80">💡 Token 余额不足，请前往 <a href="https://alphinel.com/dashboard" target="_blank" rel="noopener noreferrer" className="underline text-cyan-400 hover:text-cyan-300">AlphaSentinel 主页</a> 充值</span>
+                        ? <span className="text-amber-400/80">{t('sentiment.scanHistory.tokenInsufficient')} <a href="https://alphinel.com/dashboard" target="_blank" rel="noopener noreferrer" className="underline text-cyan-400 hover:text-cyan-300">AlphaSentinel</a></span>
                         : isRateLimit
-                        ? <span className="text-amber-400/70">⏱️ 请求频率受限，请联系管理员调高限制或降低扫描频率</span>
+                        ? <span className="text-amber-400/70">{t('sentiment.scanHistory.rateLimited')}</span>
                         : f.errorDetail && <span className="text-slate-500">{f.errorDetail}</span>
                       }
                     </p>
@@ -1914,6 +1926,7 @@ function SignalEventHistory() {
 
 // ==================== 主组件 ====================
 export default function SentimentMonitor() {
+  const { t } = useTranslation();
   const [scanMode, setScanMode] = useState<ScanMode>('self-hosted');
   const [analyzing, setAnalyzing] = useState(false);
   const analyzingRef = useRef(false);
@@ -2065,7 +2078,7 @@ export default function SentimentMonitor() {
     const poll = async () => {
       if (Date.now() - startTime > maxRecovery) {
         console.warn('[Recovery] 补偿轮询超时，放弃');
-        setError(prev => prev.includes('扫描超时') ? prev + ' (补偿轮询也已超时)' : prev);
+        setError(prev => prev.includes('timeout') || prev.includes('超时') ? prev + ' (' + t('sentiment.errors.recoveryTimeout') + ')' : prev);
         return;
       }
       try {
@@ -2106,7 +2119,7 @@ export default function SentimentMonitor() {
         // 向后兼容: 旧配置无 role 字段
         const anyConfig = (await db.llmConfigs.filter(c => c.enabled).toArray())[0];
         if (!anyConfig) {
-          setError('请先配置并启用至少一个「分析 Analyzer」LLM 模型');
+          setError(t('sentiment.errors.noAnalyzer'));
           analyzingRef.current = false;
           setAnalyzing(false);
           return;
@@ -2120,7 +2133,7 @@ export default function SentimentMonitor() {
 
       const signalDefs = await db.signalDefinitions.filter(s => s.enabled).toArray();
       if (signalDefs.length === 0) {
-        setError('请先启用信号');
+        setError(t('sentiment.errors.noSignals'));
         analyzingRef.current = false;
         setAnalyzing(false);
         return;
@@ -2207,7 +2220,7 @@ export default function SentimentMonitor() {
       const elapsed = Math.round((Date.now() - scanStartRef.current) / 1000);
       setScanResult({ success: true, signalCount: events.length, alertCount: alerts.length, elapsed });
     } catch (err: any) {
-      setError(`分析失败: ${err.message}`);
+      setError(t('sentiment.errors.analysisFailed', { message: err.message }));
       setScanResult({ success: false, signalCount: 0, alertCount: 0, elapsed: Math.round((Date.now() - scanStartRef.current) / 1000) });
     }
     analyzingRef.current = false;
@@ -2228,16 +2241,16 @@ export default function SentimentMonitor() {
     try {
       const config = (await db.publicServiceConfigs.filter(c => c.enabled).toArray())[0];
       if (!config) {
-        setError('请先配置并启用公共扫描服务');
+        setError(t('sentiment.errors.noPublicConfig'));
         analyzingRef.current = false;
         setAnalyzing(false);
         return;
       }
 
-      setProgress({ step: 0, totalSteps: 2, label: '📡 请求服务端扫描', detail: config.serverUrl });
+      setProgress({ step: 0, totalSteps: 2, label: t('sentiment.errors.requestScan'), detail: config.serverUrl });
       const { briefingId, estimatedSeconds } = await requestScan(config);
 
-      setProgress({ step: 1, totalSteps: 2, label: '⏳ 等待扫描结果', detail: `预计 ${estimatedSeconds}s (${briefingId.slice(0, 8)}...)` });
+      setProgress({ step: 1, totalSteps: 2, label: t('sentiment.errors.waitResult'), detail: t('sentiment.errors.waitDetail', { estimated: estimatedSeconds, id: briefingId.slice(0, 8) }) });
 
       // 轮询等待结果 (最多等待 estimatedSeconds * 3，最少 120s)
       const maxWait = Math.max(120, (estimatedSeconds || 60) * 3) * 1000;
@@ -2247,7 +2260,7 @@ export default function SentimentMonitor() {
       while (Date.now() - start < maxWait) {
         await new Promise(r => setTimeout(r, 3000));
         const elapsed = Math.round((Date.now() - start) / 1000);
-        setProgress({ step: 1, totalSteps: 2, label: '⏳ 等待扫描结果', detail: `已等待 ${elapsed}s / 预计 ${estimatedSeconds}s (${briefingId.slice(0, 8)}...)` });
+        setProgress({ step: 1, totalSteps: 2, label: t('sentiment.errors.waitResult'), detail: t('sentiment.errors.waitElapsed', { elapsed, estimated: estimatedSeconds, id: briefingId.slice(0, 8) }) });
         try {
           const briefings = await fetchLatestBriefings(config, 10);
           console.log(`[PublicScan] 轮询 ${elapsed}s: 获取到 ${briefings.length} 条简报`, briefings.map(b => b.briefingId));
@@ -2263,7 +2276,7 @@ export default function SentimentMonitor() {
       }
 
       if (!briefing) {
-        setError(`扫描超时 (等待${Math.round(maxWait/1000)}s)，后台继续等待结果...`);
+        setError(t('sentiment.errors.scanTimeout', { seconds: Math.round(maxWait/1000) }));
         startRecoveryPoll(briefingId);
         analyzingRef.current = false;
         setAnalyzing(false);
@@ -2273,7 +2286,7 @@ export default function SentimentMonitor() {
 
       await processBriefingResult(briefing, '公共扫描');
     } catch (err: any) {
-      setError(`公共服务扫描失败: ${err.message}`);
+      setError(t('sentiment.errors.publicScanFailed', { message: err.message }));
     }
     analyzingRef.current = false;
     setAnalyzing(false);
@@ -2287,12 +2300,12 @@ export default function SentimentMonitor() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            🛡️ <span className="bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">Sentinel-X 信号监控</span>
+            🛡️ <span className="bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">{t('sentiment.title')}</span>
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             {scanMode === 'self-hosted'
-              ? '实时数据采集 → 联网搜索 → 300信号分析 → 三大指数 → 网格调参'
-              : '公共服务推送简报 → 300信号评分 → 三大指数 → 网格调参 → 社交通知'}
+              ? t('sentiment.subtitleSelf')
+              : t('sentiment.subtitlePublic')}
           </p>
         </div>
       </div>
@@ -2308,11 +2321,11 @@ export default function SentimentMonitor() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm font-semibold text-purple-300">
-                  {scanMode === 'self-hosted' ? '🔍 自建模式扫描中' : '📡 公共服务扫描中'}
+                  {scanMode === 'self-hosted' ? t('sentiment.scanProgressSelf') : t('sentiment.scanProgressPublic')}
                 </span>
                 <span className="text-sm text-slate-500">—</span>
                 <span className="text-sm text-slate-400">
-                  {progress ? progress.label : (scanMode === 'public-service' ? '连接公共服务...' : '初始化管线...')}
+                  {progress ? progress.label : (scanMode === 'public-service' ? t('sentiment.connectingPublic') : t('sentiment.initPipeline'))}
                 </span>
               </div>
               {progress && (
@@ -2347,13 +2360,13 @@ export default function SentimentMonitor() {
               <div>
                 <p className={`text-sm font-semibold ${scanResult.success ? 'text-emerald-300' : 'text-red-300'}`}>
                   {scanResult.success
-                    ? `扫描完成 — 发现 ${scanResult.signalCount} 个信号${scanResult.alertCount > 0 ? `，${scanResult.alertCount} 条预警` : ''}`
-                    : '扫描失败'
+                    ? (scanResult.alertCount > 0 ? t('sentiment.scanCompleteAlerts', { signalCount: scanResult.signalCount, alertCount: scanResult.alertCount }) : t('sentiment.scanComplete', { signalCount: scanResult.signalCount }))
+                    : t('sentiment.scanFailed')
                   }
                 </p>
                 <p className="text-sm text-slate-500">
-                  耗时 {scanResult.elapsed}s
-                  {scanResult.success && scanResult.signalCount === 0 && ' — 当前市场平静，未触发任何信号'}
+                  {t('sentiment.elapsed', { seconds: scanResult.elapsed })}
+                  {scanResult.success && scanResult.signalCount === 0 && ` — ${t('sentiment.marketCalm')}`}
                 </p>
               </div>
             </div>
@@ -2367,9 +2380,9 @@ export default function SentimentMonitor() {
       {/* Pipeline 结果摘要 */}
       {pipelineResult && !analyzing && (
         <div className="flex items-center gap-3 text-sm text-slate-500">
-          <span className="flex items-center gap-1">{pipelineResult.hasMarketData ? '✅' : '⚠️'} 实时数据</span>
-          <span className="flex items-center gap-1">{pipelineResult.hasSearcher ? `✅ 搜索(${LLM_PROVIDERS[pipelineResult.searcherProvider as LLMProvider]?.name || pipelineResult.searcherProvider || '?'})` : '⏭️ 搜索(未配置)'}</span>
-          <span className="flex items-center gap-1">✅ 分析({LLM_PROVIDERS[pipelineResult.analyzerProvider as LLMProvider]?.name || pipelineResult.analyzerProvider || '?'})</span>
+          <span className="flex items-center gap-1">{pipelineResult.hasMarketData ? '✅' : '⚠️'} {t('sentiment.pipelineRealtime')}</span>
+          <span className="flex items-center gap-1">{pipelineResult.hasSearcher ? `✅ ${t('sentiment.pipelineSearch')}(${LLM_PROVIDERS[pipelineResult.searcherProvider as LLMProvider]?.name || pipelineResult.searcherProvider || '?'})` : `⏭️ ${t('sentiment.pipelineSearchNone')}`}</span>
+          <span className="flex items-center gap-1">✅ {t('sentiment.pipelineAnalyze')}({LLM_PROVIDERS[pipelineResult.analyzerProvider as LLMProvider]?.name || pipelineResult.analyzerProvider || '?'})</span>
         </div>
       )}
 
@@ -2385,13 +2398,13 @@ export default function SentimentMonitor() {
         <div className="card border-red-500/30 space-y-3">
           <h3 className="text-lg font-semibold flex items-center gap-2 text-red-400">
             <AlertTriangle className="w-5 h-5" />
-            检测到 {newAlerts.length} 个预警事件
+            {t('sentiment.alertsDetected', { count: newAlerts.length })}
           </h3>
           {newAlerts.map((alert, i) => (
             <div key={i} className="p-4 rounded-xl" style={alert.level === 'critical' ? { background: 'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(15,23,42,0.4) 100%)', border: '1px solid rgba(239,68,68,0.18)' } : alert.level === 'warning' ? { background: 'linear-gradient(135deg, rgba(234,179,8,0.08) 0%, rgba(15,23,42,0.4) 100%)', border: '1px solid rgba(234,179,8,0.18)' } : { background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(51,65,85,0.3)' }}>
               <div className="flex items-center gap-2 mb-2">
                 <span className={`text-sm px-2 py-0.5 rounded-full font-medium ${alert.level === 'critical' ? 'bg-red-600/20 text-red-400' : alert.level === 'warning' ? 'bg-amber-600/20 text-amber-400' : 'bg-slate-700 text-slate-400'}`}>
-                  {alert.level === 'critical' ? '🚨 紧急' : alert.level === 'warning' ? '⚠️ 警告' : 'ℹ️ 信息'}
+                  {alert.level === 'critical' ? t('sentiment.alertCritical') : alert.level === 'warning' ? t('sentiment.alertWarning') : t('sentiment.alertInfo')}
                 </span>
                 <span className="font-medium text-sm">{alert.title}</span>
               </div>

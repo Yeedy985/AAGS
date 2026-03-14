@@ -7,6 +7,7 @@ import { useMemo, useState, useRef, useEffect } from 'react';
 import { updateStrategyProfit } from '../services/strategyExecutor';
 import type { EquitySnapshot, TradeRecord } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useTranslation } from 'react-i18next';
 
 const STAT_STYLES: Record<string, { bg: string; shadow: string; text: string }> = {
   blue:   { bg: 'linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(59,130,246,0.05) 100%)', shadow: '0 2px 10px -2px rgba(59,130,246,0.25)', text: 'text-blue-400' },
@@ -51,6 +52,7 @@ function StatCard({ title, value, sub, icon: Icon, color, compact }: {
 export default function Dashboard() {
   const { strategies, accountInfo, tickers } = useStore();
   const isMobile = useIsMobile();
+  const { t } = useTranslation();
 
   const snapshots = useLiveQuery(
     () => db.equitySnapshots.where('strategyId').equals(0).sortBy('timestamp'),
@@ -82,14 +84,14 @@ export default function Dashboard() {
 
   // 时间粒度配置
   const INTERVALS = [
-    { key: '1s',  label: '1秒',   ms: 1000,              maxPoints: 120 },
-    { key: '1m',  label: '1分钟', ms: 60 * 1000,         maxPoints: 120 },
-    { key: '15m', label: '15分钟', ms: 15 * 60 * 1000,   maxPoints: 96 },
-    { key: '1h',  label: '1小时', ms: 60 * 60 * 1000,    maxPoints: 72 },
-    { key: '4h',  label: '4小时', ms: 4 * 60 * 60 * 1000, maxPoints: 60 },
-    { key: '1d',  label: '1日',   ms: 24 * 60 * 60 * 1000, maxPoints: 60 },
-    { key: '1w',  label: '1周',   ms: 7 * 24 * 60 * 60 * 1000, maxPoints: 52 },
-    { key: '1M',  label: '1月',   ms: 30 * 24 * 60 * 60 * 1000, maxPoints: 24 },
+    { key: '1s',  label: t('dashboard.interval.1s'),  ms: 1000,              maxPoints: 120 },
+    { key: '1m',  label: t('dashboard.interval.1m'),  ms: 60 * 1000,         maxPoints: 120 },
+    { key: '15m', label: t('dashboard.interval.15m'), ms: 15 * 60 * 1000,   maxPoints: 96 },
+    { key: '1h',  label: t('dashboard.interval.1h'),  ms: 60 * 60 * 1000,    maxPoints: 72 },
+    { key: '4h',  label: t('dashboard.interval.4h'),  ms: 4 * 60 * 60 * 1000, maxPoints: 60 },
+    { key: '1d',  label: t('dashboard.interval.1d'),  ms: 24 * 60 * 60 * 1000, maxPoints: 60 },
+    { key: '1w',  label: t('dashboard.interval.1w'),  ms: 7 * 24 * 60 * 60 * 1000, maxPoints: 52 },
+    { key: '1M',  label: t('dashboard.interval.1M'),  ms: 30 * 24 * 60 * 60 * 1000, maxPoints: 24 },
   ] as const;
   const [intervalKey, setIntervalKey] = useState<string>('1m');
   const selectedInterval = INTERVALS.find(i => i.key === intervalKey) || INTERVALS[1];
@@ -196,7 +198,7 @@ export default function Dashboard() {
     <div className={isMobile ? 'space-y-3' : 'space-y-6'}>
       {!isMobile && (
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">仪表盘</h1>
+          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">{t('dashboard.title')}</h1>
           <span className="text-sm text-slate-500 font-medium">
             {new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
           </span>
@@ -205,12 +207,12 @@ export default function Dashboard() {
 
       {/* Stats Grid */}
       <div className={isMobile ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4'}>
-        <StatCard title="总资产" value={`$${totalAsset.toLocaleString()}`} icon={Wallet} color="blue" compact={isMobile} />
-        <StatCard title="累计收益" value={`$${stats.totalProfit.toFixed(2)}`} icon={TrendingUp} color="green" compact={isMobile} />
-        <StatCard title="今日收益" value={`$${stats.todayProfit.toFixed(2)}`} icon={stats.todayProfit >= 0 ? TrendingUp : TrendingDown} color={stats.todayProfit >= 0 ? 'green' : 'red'} compact={isMobile} />
-        <StatCard title="运行策略" value={`${stats.running}`} sub={`共 ${strategies.length} 个`} icon={Activity} color="purple" compact={isMobile} />
-        <StatCard title="胜率" value={`${stats.winRate}%`} sub={`${stats.totalTrades} 笔交易`} icon={Target} color="yellow" compact={isMobile} />
-        <StatCard title="最大回撤" value={`${stats.maxDD.toFixed(2)}%`} icon={Zap} color="red" compact={isMobile} />
+        <StatCard title={t('dashboard.totalAssets')} value={`$${totalAsset.toLocaleString()}`} icon={Wallet} color="blue" compact={isMobile} />
+        <StatCard title={t('dashboard.totalPnl')} value={`$${stats.totalProfit.toFixed(2)}`} icon={TrendingUp} color="green" compact={isMobile} />
+        <StatCard title={t('dashboard.todayPnl')} value={`$${stats.todayProfit.toFixed(2)}`} icon={stats.todayProfit >= 0 ? TrendingUp : TrendingDown} color={stats.todayProfit >= 0 ? 'green' : 'red'} compact={isMobile} />
+        <StatCard title={t('dashboard.activeStrategies')} value={`${stats.running}`} sub={t('dashboard.totalCount', { count: strategies.length })} icon={Activity} color="purple" compact={isMobile} />
+        <StatCard title={t('dashboard.winRate')} value={`${stats.winRate}%`} sub={t('dashboard.tradesCount', { count: stats.totalTrades })} icon={Target} color="yellow" compact={isMobile} />
+        <StatCard title={t('dashboard.maxDrawdown')} value={`${stats.maxDD.toFixed(2)}%`} icon={Zap} color="red" compact={isMobile} />
       </div>
 
       {/* Charts Row */}
@@ -218,7 +220,7 @@ export default function Dashboard() {
         {/* Equity Curve */}
         <div className="card">
           <div className={isMobile ? 'mb-3' : 'flex items-center justify-between mb-4'}>
-            <h3 className={`${isMobile ? 'text-sm mb-2' : 'text-base'} font-medium text-slate-400`}>净值曲线</h3>
+            <h3 className={`${isMobile ? 'text-sm mb-2' : 'text-base'} font-medium text-slate-400`}>{t('dashboard.equityCurve')}</h3>
             <div className={`flex items-center gap-1 ${isMobile ? 'overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none' : ''}`}>
               {INTERVALS.map(iv => (
                 <button
@@ -267,18 +269,18 @@ export default function Dashboard() {
                     contentStyle={{ backgroundColor: 'rgba(15,23,42,0.9)', border: '1px solid rgba(51,65,85,0.4)', borderRadius: '12px', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px -4px rgba(0,0,0,0.4)' }}
                     labelStyle={{ color: '#94a3b8', fontSize: 12 }}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={(v: any) => [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, '净值']}
+                    formatter={(v: any) => [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, t('reports.netValue')]}
                   />
                   <Area type="monotone" dataKey="value" stroke="#3b82f6" fill="url(#colorValue)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
-              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 text-right mt-1`}>{chartData.length} 个数据点 · {selectedInterval.label}</p>
+              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 text-right mt-1`}>{t('dashboard.chart.dataPoints', { count: chartData.length })} · {selectedInterval.label}</p>
             </>
           ) : (
             <div className={`${isMobile ? 'h-[180px]' : 'h-[250px]'} flex items-center justify-center text-slate-600`}>
               <div className="text-center">
-                <p>暂无数据</p>
-                <p className={`${isMobile ? 'text-xs' : 'text-sm'} mt-1`}>账户资产数据将每次刷新时自动记录</p>
+                <p>{t('common.noData')}</p>
+                <p className={`${isMobile ? 'text-xs' : 'text-sm'} mt-1`}>{t('dashboard.emptyEquityDesc')}</p>
               </div>
             </div>
           )}
@@ -286,7 +288,7 @@ export default function Dashboard() {
 
         {/* Cumulative Profit Curve */}
         <div className="card">
-          <h3 className={`${isMobile ? 'text-sm mb-2' : 'text-base mb-4'} font-medium text-slate-400`}>累计收益曲线</h3>
+          <h3 className={`${isMobile ? 'text-sm mb-2' : 'text-base mb-4'} font-medium text-slate-400`}>{t('dashboard.cumulativeCurve')}</h3>
           {cumulativeProfitData.length > 0 ? (
             <ResponsiveContainer width="100%" height={isMobile ? 180 : 250}>
               <AreaChart data={cumulativeProfitData}>
@@ -303,7 +305,7 @@ export default function Dashboard() {
                 <Tooltip
                   contentStyle={{ backgroundColor: 'rgba(15,23,42,0.9)', border: '1px solid rgba(51,65,85,0.4)', borderRadius: '12px', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px -4px rgba(0,0,0,0.4)' }}
                   labelStyle={{ color: '#94a3b8', fontSize: 12 }}
-                  formatter={(v: any) => [`$${Number(v).toFixed(4)}`, '累计收益']}
+                  formatter={(v: any) => [`$${Number(v).toFixed(4)}`, t('reports.cumulativeReturn')]}
                 />
                 <Area type="monotone" dataKey="cumulative" stroke={cumulativeProfitData[cumulativeProfitData.length - 1]?.cumulative >= 0 ? '#10b981' : '#ef4444'} fill="url(#cumulGrad)" strokeWidth={2} dot={false} />
               </AreaChart>
@@ -311,8 +313,8 @@ export default function Dashboard() {
           ) : (
             <div className={`${isMobile ? 'h-[180px]' : 'h-[250px]'} flex items-center justify-center text-slate-600`}>
               <div className="text-center">
-                <p>暂无数据</p>
-                <p className={`${isMobile ? 'text-xs' : 'text-sm'} mt-1`}>完成配对交易后将自动显示累计收益</p>
+                <p>{t('common.noData')}</p>
+                <p className={`${isMobile ? 'text-xs' : 'text-sm'} mt-1`}>{t('dashboard.emptyCumulativeDesc')}</p>
               </div>
             </div>
           )}
@@ -325,14 +327,14 @@ export default function Dashboard() {
         <div className="card">
           <div className={isMobile ? 'mb-3' : 'flex items-center justify-between mb-4'}>
             <h3 className={`${isMobile ? 'text-sm mb-2' : 'text-base'} font-medium text-slate-400`}>
-              {firstStrategy ? `${firstStrategy.symbol.replace('USDT', '')}/USDT 成交价格` : '成交价格曲线'}
+              {firstStrategy ? `${firstStrategy.symbol.replace('USDT', '')}/USDT ${t('dashboard.tradePriceTitle')}` : t('dashboard.tradePriceCurve')}
             </h3>
             <div className="flex items-center gap-1">
-              {firstStrategyTrades && <span className="text-xs text-slate-600 mr-1">{firstStrategyTrades.length}笔</span>}
+              {firstStrategyTrades && <span className="text-xs text-slate-600 mr-1">{firstStrategyTrades.length}</span>}
               {(['1m', '15m', '1h', '1d', '1w'] as const).map(val => (
                 <button key={val} onClick={() => setTradeChartInterval(val)}
                   className={`px-2 py-0.5 text-xs rounded transition-colors ${tradeChartInterval === val ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40' : 'text-slate-500 hover:text-slate-300 border border-transparent'}`}>
-                  {{ '1m': '1分', '15m': '15分', '1h': '1时', '1d': '1天', '1w': '1周' }[val]}
+                  {t(`dashboard.tradeInterval.${val}`)}
                 </button>
               ))}
             </div>
@@ -348,16 +350,16 @@ export default function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.15)" />
                 <XAxis dataKey="time" tick={{ fill: '#64748b', fontSize: isMobile ? 9 : 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={40} />
                 <YAxis tick={{ fill: '#64748b', fontSize: isMobile ? 9 : 10 }} axisLine={false} tickLine={false} domain={[yMin, yMax]} tickFormatter={(v: number) => v.toFixed(priceFmt)} width={cp < 1 ? 65 : 55} />
-                <ReferenceLine y={cp} stroke="#94a3b8" strokeDasharray="6 3" strokeWidth={1.5} label={{ value: `开仓 ${cp.toFixed(priceFmt)}`, position: 'right', fill: '#94a3b8', fontSize: 10 }} />
+                <ReferenceLine y={cp} stroke="#94a3b8" strokeDasharray="6 3" strokeWidth={1.5} label={{ value: `${t('dashboard.entryLabel')} ${cp.toFixed(priceFmt)}`, position: 'right', fill: '#94a3b8', fontSize: 10 }} />
                 <Tooltip
                   contentStyle={{ backgroundColor: 'rgba(15,23,42,0.9)', border: '1px solid rgba(51,65,85,0.4)', borderRadius: '12px', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px -4px rgba(0,0,0,0.4)' }}
                   labelStyle={{ color: '#94a3b8', fontSize: 11, marginBottom: 4 }}
                   formatter={(v: any, name: any, props: any) => {
                     if (v === null || v === undefined) return ['-', ''];
                     const entry = props.payload;
-                    const label = name === 'buyPrice' ? '买入价' : '卖出价';
+                    const label = name === 'buyPrice' ? t('dashboard.buyPrice') : t('dashboard.sellPrice');
                     const count = name === 'buyPrice' ? entry.buyCount : entry.sellCount;
-                    return [`${Number(v).toFixed(priceFmt)} (${count}笔)`, label];
+                    return [`${Number(v).toFixed(priceFmt)} (${count})`, label];
                   }}
                 />
                 <Line type="monotone" dataKey="buyPrice" stroke="#10b981" strokeWidth={2} dot={{ r: 2, fill: '#10b981' }} connectNulls name="buyPrice" />
@@ -368,8 +370,8 @@ export default function Dashboard() {
           })() : (
             <div className={`${isMobile ? 'h-[200px]' : 'h-[260px]'} flex items-center justify-center text-slate-600`}>
               <div className="text-center">
-                <p>暂无交易数据</p>
-                <p className={`${isMobile ? 'text-xs' : 'text-sm'} mt-1`}>策略执行交易后将实时显示</p>
+                <p>{t('dashboard.noTradeData')}</p>
+                <p className={`${isMobile ? 'text-xs' : 'text-sm'} mt-1`}>{t('dashboard.noTradeDataDesc')}</p>
               </div>
             </div>
           )}
@@ -377,7 +379,7 @@ export default function Dashboard() {
 
         {/* Strategy Performance — Binance-style (same as StrategyManager) */}
         <div className="card">
-          <h3 className={`${isMobile ? 'text-sm mb-3' : 'text-base mb-4'} font-medium text-slate-400`}>策略执行概览</h3>
+          <h3 className={`${isMobile ? 'text-sm mb-3' : 'text-base mb-4'} font-medium text-slate-400`}>{t('dashboard.strategyOverview')}</h3>
           {strategies.length > 0 ? (
             <div className={isMobile ? 'space-y-3' : 'space-y-4'}>
               {strategies.map((s) => {
@@ -386,7 +388,7 @@ export default function Dashboard() {
                   const days = Math.floor(d / 86400000);
                   const hrs = Math.floor((d % 86400000) / 3600000);
                   const mins = Math.floor((d % 3600000) / 60000);
-                  return days > 0 ? `${days}天 ${hrs}时` : hrs > 0 ? `${hrs}时 ${mins}分` : `${mins}分`;
+                  return days > 0 ? `${days}${t('strategy.runtimeFormat.days')} ${hrs}${t('strategy.runtimeFormat.hours')}` : hrs > 0 ? `${hrs}${t('strategy.runtimeFormat.hours')} ${mins}${t('strategy.runtimeFormat.minutes')}` : `${mins}${t('strategy.runtimeFormat.minutes')}`;
                 })() : '--';
                 const ticker = tickers.get(s.symbol);
                 const latestPrice = ticker ? parseFloat(ticker.price) : 0;
@@ -427,7 +429,7 @@ export default function Dashboard() {
                   <div key={s.id} className="rounded-xl bg-slate-800/50 border border-slate-700/30 overflow-hidden">
                     {/* Row 1: Symbol + Status */}
                     <div className={`flex items-center justify-between ${px} pt-2 pb-0.5`}>
-                      <span className={`${cellText} text-slate-500`}>现货网格</span>
+                      <span className={`${cellText} text-slate-500`}>{t('strategy.spotGrid')}</span>
                     </div>
                     <div className={`flex items-center justify-between ${px} pb-1`}>
                       <p className={`${isMobile ? 'text-sm' : 'text-base'} font-bold`}>{s.symbol.replace('USDT', '')}/USDT</p>
@@ -436,7 +438,7 @@ export default function Dashboard() {
                         s.status === 'paused' ? 'text-yellow-400' :
                         s.status === 'error' ? 'text-red-400' : 'text-slate-400'
                       }`}>
-                        {s.status === 'running' ? '运行中' : s.status === 'paused' ? '已暂停' : s.status === 'idle' ? '待启动' : '已停止'} &gt;
+                        {t(`strategy.status.${s.status}`)} &gt;
                       </span>
                     </div>
 
@@ -444,8 +446,8 @@ export default function Dashboard() {
                     <div className={`${px} pb-2`}>
                       <p className={`${cellText} text-slate-500`}>
                         {isMobile
-                          ? `${runtime !== '--' ? `运行 ${runtime}` : '未启动'}`
-                          : `创建时间 ${new Date(s.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}${s.startedAt ? `, 运行时间 ${runtime}` : ''}`
+                          ? `${runtime !== '--' ? `${t('strategy.running')} ${runtime}` : t('strategy.notStarted')}`
+                          : `${t('strategy.createdTime')} ${new Date(s.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}${s.startedAt ? `, ${t('strategy.runtime')} ${runtime}` : ''}`
                         }
                       </p>
                     </div>
@@ -453,20 +455,20 @@ export default function Dashboard() {
                     {/* Row 3: Investment / Price Range / Grid Count */}
                     <div className={`grid ${isMobile ? 'grid-cols-2 gap-x-2 gap-y-1.5' : 'grid-cols-3 gap-3'} ${px} pb-2 ${cellText}`}>
                       <div>
-                        <p className="text-slate-500 mb-0.5">{isMobile ? '投资额' : '总投资额 (USDT)'}</p>
+                        <p className="text-slate-500 mb-0.5">{isMobile ? t('strategy.investmentShort') : t('strategy.totalInvestment')}</p>
                         <p className="font-semibold text-slate-200">{s.totalFund.toFixed(isMobile ? 2 : 5)}</p>
                       </div>
                       <div>
-                        <p className="text-slate-500 mb-0.5">{isMobile ? '价格范围' : '价格范围 (USDT)'}</p>
+                        <p className="text-slate-500 mb-0.5">{isMobile ? t('strategy.priceRangeShort') : t('strategy.priceRange')}</p>
                         <p className="font-semibold text-slate-200">{s.lowerPrice.toFixed(isMobile ? 2 : 5)} - {s.upperPrice.toFixed(isMobile ? 2 : 5)}</p>
                       </div>
                       <div>
-                        <p className="text-slate-500 mb-0.5">网格数量</p>
+                        <p className="text-slate-500 mb-0.5">{t('strategy.gridCount')}</p>
                         <p className="font-semibold text-slate-200">{totalGridCount}</p>
                       </div>
                       {isMobile && (
                         <div>
-                          <p className="text-slate-500 mb-0.5">最新价</p>
+                          <p className="text-slate-500 mb-0.5">{t('strategy.latestPrice')}</p>
                           <p className="font-semibold text-slate-200">{latestPrice > 0 ? latestPrice.toFixed(latestPrice < 1 ? 5 : 2) : '--'}</p>
                         </div>
                       )}
@@ -475,7 +477,7 @@ export default function Dashboard() {
                     {/* Row 4: Total Profit / Grid Profit / Unrealized PnL */}
                     <div className={`grid grid-cols-3 ${isMobile ? 'gap-1' : 'gap-3'} ${px} pb-2 ${cellText}`}>
                       <div>
-                        <p className="text-slate-500 mb-0.5">{isMobile ? '总收益' : '总收益(USDT)'}</p>
+                        <p className="text-slate-500 mb-0.5">{isMobile ? t('strategy.totalReturnShort') : t('strategy.totalReturn')}</p>
                         <p className={`font-semibold ${totalReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           {totalReturn >= 0 ? '+' : ''}{totalReturn.toFixed(isMobile ? 2 : 5)}
                         </p>
@@ -484,7 +486,7 @@ export default function Dashboard() {
                         </p>
                       </div>
                       <div>
-                        <p className="text-slate-500 mb-0.5">{isMobile ? '网格利润' : '网格利润(USDT)'}</p>
+                        <p className="text-slate-500 mb-0.5">{isMobile ? t('strategy.gridProfitShort') : t('strategy.gridProfit')}</p>
                         <p className={`font-semibold ${gridProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           {gridProfit >= 0 ? '+' : ''}{gridProfit.toFixed(isMobile ? 2 : 5)}
                         </p>
@@ -493,7 +495,7 @@ export default function Dashboard() {
                         </p>
                       </div>
                       <div>
-                        <p className="text-slate-500 mb-0.5">{isMobile ? '浮动盈亏' : '浮动盈亏(USDT)'}</p>
+                        <p className="text-slate-500 mb-0.5">{isMobile ? t('strategy.unrealizedPnlShort') : t('strategy.unrealizedPnl')}</p>
                         <p className={`font-semibold ${unrealizedPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           {unrealizedPnl >= 0 ? '+' : ''}{unrealizedPnl.toFixed(isMobile ? 2 : 5)}
                         </p>
@@ -506,11 +508,11 @@ export default function Dashboard() {
                     {/* Row 5: Qty per trade / Matched count / Latest price (desktop only for latest price) */}
                     <div className={`grid ${isMobile ? 'grid-cols-2 gap-1' : 'grid-cols-3 gap-3'} ${px} pb-2.5 ${cellText}`}>
                       <div>
-                        <p className="text-slate-500 mb-0.5">{isMobile ? '每笔数量' : `每笔数量 (${s.baseAsset})`}</p>
+                        <p className="text-slate-500 mb-0.5">{isMobile ? t('strategy.qtyPerTrade') : `${t('strategy.qtyPerTrade')} (${s.baseAsset})`}</p>
                         <p className="font-semibold text-slate-200">{perGridQty > 0 ? perGridQty.toFixed(perGridQty < 1 ? 5 : 2) : '--'}</p>
                       </div>
                       <div>
-                        <p className="text-slate-500 mb-0.5">成交/配对</p>
+                        <p className="text-slate-500 mb-0.5">{t('strategy.matchPair')}</p>
                         {(() => {
                           const trades = allTradeRecords.filter(t => t.strategyId === s.id);
                           // FIFO 配对: 和 updateStrategyProfit 保持一致
@@ -530,12 +532,12 @@ export default function Dashboard() {
                               else if (t.side === 'sell' && buyStack.length > 0) { buyStack.shift(); pairs++; }
                             }
                           }
-                          return <p className="font-semibold text-slate-200">{trades.length}笔 / {pairs}对</p>;
+                          return <p className="font-semibold text-slate-200">{trades.length}{t('strategy.trades')} / {pairs}{t('strategy.pairs')}</p>;
                         })()}
                       </div>
                       {!isMobile && (
                         <div>
-                          <p className="text-slate-500 mb-0.5">最新价 (USDT)</p>
+                          <p className="text-slate-500 mb-0.5">{t('strategy.latestPriceUsdt')}</p>
                           <p className="font-semibold text-slate-200">{latestPrice > 0 ? latestPrice.toFixed(latestPrice < 1 ? 5 : 2) : '--'}</p>
                         </div>
                       )}
@@ -545,7 +547,7 @@ export default function Dashboard() {
               })}
             </div>
           ) : (
-            <div className={`${isMobile ? 'h-[120px]' : 'h-[250px]'} flex items-center justify-center text-slate-600`}>暂无策略</div>
+            <div className={`${isMobile ? 'h-[120px]' : 'h-[250px]'} flex items-center justify-center text-slate-600`}>{t('strategy.noStrategies')}</div>
           )}
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Bell, BellRing, Trash2, Send, Eye, EyeOff, CheckCircle,
   AlertTriangle, Info, Loader2, MessageCircle, Plus, ChevronDown, Settings2, Pencil, X,
@@ -13,6 +14,7 @@ import type { NotificationConfig, AlertLevel, EventAlert as EventAlertType } fro
 
 // ==================== 子组件: 通知渠道配置 ====================
 function NotificationConfigPanel() {
+  const { t } = useTranslation();
   const configs = useLiveQuery(() => db.notificationConfigs.toArray(), []);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -122,7 +124,7 @@ function NotificationConfigPanel() {
       const result = await diagnosticTest(config);
       setTestResult(result);
     } catch (err: any) {
-      setTestResult(`❌ 异常: ${err.message}`);
+      setTestResult(`❌ ${t('eventAlert.notify.error')}: ${err.message}`);
     }
     setTesting(null);
     setTimeout(() => setTestResult(''), 15000);
@@ -133,7 +135,7 @@ function NotificationConfigPanel() {
     <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 space-y-4">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold text-slate-300">
-          {editingId ? '✏️ 编辑渠道' : '➕ 添加渠道'}
+          {editingId ? `✏️ ${t('eventAlert.notify.editChannel')}` : `➕ ${t('eventAlert.notify.addChannel')}`}
         </h4>
         <button className="p-1 text-slate-500 hover:text-slate-300" onClick={resetForm}>
           <X className="w-4 h-4" />
@@ -143,7 +145,7 @@ function NotificationConfigPanel() {
       {/* 渠道选择 (新增时可切换，编辑时锁定) */}
       {!editingId && (
         <div>
-          <label className="text-sm font-medium text-slate-300 block mb-2">推送渠道</label>
+          <label className="text-sm font-medium text-slate-300 block mb-2">{t('eventAlert.notify.pushChannel')}</label>
           <div className="grid grid-cols-2 gap-2">
             <button
               className={`p-3 rounded-lg border text-sm text-left transition-colors ${
@@ -152,7 +154,7 @@ function NotificationConfigPanel() {
               onClick={() => setChannel('telegram')}
             >
               <span className="font-medium block">📱 Telegram</span>
-              <span className="text-sm text-slate-500 mt-1 block">通过 Bot API 推送消息</span>
+              <span className="text-sm text-slate-500 mt-1 block">{t('eventAlert.notify.telegramDesc')}</span>
             </button>
             <button
               className={`p-3 rounded-lg border text-sm text-left transition-colors ${
@@ -161,7 +163,7 @@ function NotificationConfigPanel() {
               onClick={() => setChannel('whatsapp')}
             >
               <span className="font-medium block">💬 WhatsApp</span>
-              <span className="text-sm text-slate-500 mt-1 block">通过 WhatsApp Business API</span>
+              <span className="text-sm text-slate-500 mt-1 block">{t('eventAlert.notify.whatsappDesc')}</span>
             </button>
           </div>
         </div>
@@ -176,7 +178,7 @@ function NotificationConfigPanel() {
               <input
                 className="input-field pr-10"
                 type={showKey ? 'text' : 'password'}
-                placeholder="从 @BotFather 获取"
+                placeholder={t('eventAlert.notify.botTokenPlaceholder')}
                 value={botToken}
                 onChange={(e) => setBotToken(e.target.value)}
               />
@@ -184,17 +186,17 @@ function NotificationConfigPanel() {
                 {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            <p className="text-sm text-slate-600 mt-1">在 Telegram 中搜索 @BotFather 创建 Bot</p>
+            <p className="text-sm text-slate-600 mt-1">{t('eventAlert.notify.botTokenHint')}</p>
           </div>
           <div>
-            <label className="text-sm text-slate-400 block mb-1">Chat ID</label>
+            <label className="text-sm text-slate-400 block mb-1">{t('eventAlert.notify.chatId')}</label>
             <input
               className="input-field"
-              placeholder="你的 Chat ID 或群组 ID"
+              placeholder={t('eventAlert.notify.chatIdPlaceholder')}
               value={chatId}
               onChange={(e) => setChatId(e.target.value)}
             />
-            <p className="text-sm text-slate-600 mt-1">发送 /start 给 @userinfobot 获取</p>
+            <p className="text-sm text-slate-600 mt-1">{t('eventAlert.notify.chatIdHint')}</p>
           </div>
         </div>
       )}
@@ -204,11 +206,11 @@ function NotificationConfigPanel() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm text-slate-400 block mb-1">API 地址</label>
+              <label className="text-sm text-slate-400 block mb-1">{t('eventAlert.notify.apiUrl')}</label>
               <input className="input-field" placeholder="https://graph.facebook.com/v18.0/..." value={waApiUrl} onChange={(e) => setWaApiUrl(e.target.value)} />
             </div>
             <div>
-              <label className="text-sm text-slate-400 block mb-1">API Key / Token</label>
+              <label className="text-sm text-slate-400 block mb-1">{t('eventAlert.notify.apiKeyToken')}</label>
               <div className="relative">
                 <input
                   className="input-field pr-10"
@@ -224,7 +226,7 @@ function NotificationConfigPanel() {
             </div>
           </div>
           <div>
-            <label className="text-sm text-slate-400 block mb-1">接收手机号</label>
+            <label className="text-sm text-slate-400 block mb-1">{t('eventAlert.notify.phoneNumber')}</label>
             <input className="input-field w-60" placeholder="+86 138xxxx" value={waPhone} onChange={(e) => setWaPhone(e.target.value)} />
           </div>
         </div>
@@ -232,9 +234,9 @@ function NotificationConfigPanel() {
 
       <div className="flex gap-2">
         <button className="btn-primary text-sm" onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingId ? '保存修改' : '添加'}
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingId ? t('eventAlert.notify.saveEdit') : t('eventAlert.notify.add')}
         </button>
-        <button className="btn-secondary text-sm" onClick={resetForm}>取消</button>
+        <button className="btn-secondary text-sm" onClick={resetForm}>{t('eventAlert.notify.cancel')}</button>
       </div>
     </div>
   );
@@ -247,7 +249,7 @@ function NotificationConfigPanel() {
             <div className="p-2 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(234,179,8,0.15) 0%, rgba(234,179,8,0.05) 100%)' }}>
               <Bell className="w-4.5 h-4.5 text-amber-400" />
             </div>
-            消息推送配置
+            {t('eventAlert.notify.title')}
           </h3>
           <ChevronDown className="w-5 h-5 text-slate-500 transition-transform duration-200 details-open:rotate-180" />
         </summary>
@@ -257,38 +259,38 @@ function NotificationConfigPanel() {
       <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/40 space-y-4">
         <h4 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
           <Settings2 className="w-4 h-4 text-cyan-400" />
-          推送设置
-          <span className="text-xs text-slate-500 font-normal ml-1">对所有已添加渠道统一生效</span>
+          {t('eventAlert.notify.pushSettings')}
+          <span className="text-xs text-slate-500 font-normal ml-1">{t('eventAlert.notify.pushSettingsDesc')}</span>
         </h4>
 
         {/* 推送内容 */}
         <div>
-          <label className="text-sm text-slate-400 block mb-2">推送内容</label>
+          <label className="text-sm text-slate-400 block mb-2">{t('eventAlert.notify.pushContent')}</label>
           <div className="flex gap-3 flex-wrap">
             <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
               gps.pushScanResults ? 'border-blue-500/50 bg-blue-600/10 text-blue-400' : 'border-slate-700 text-slate-500 hover:border-slate-600'
             }`}>
               <input type="checkbox" checked={gps.pushScanResults} onChange={e => updateGps({ pushScanResults: e.target.checked })} className="accent-blue-500" />
-              <span className="text-sm font-medium">📡 信号300扫描结果</span>
+              <span className="text-sm font-medium">📡 {t('eventAlert.notify.scanResults')}</span>
             </label>
             <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
               gps.pushAlerts ? 'border-amber-500/50 bg-amber-600/10 text-amber-400' : 'border-slate-700 text-slate-500 hover:border-slate-600'
             }`}>
               <input type="checkbox" checked={gps.pushAlerts} onChange={e => updateGps({ pushAlerts: e.target.checked })} className="accent-amber-500" />
-              <span className="text-sm font-medium">🚨 预警信息</span>
+              <span className="text-sm font-medium">🚨 {t('eventAlert.notify.alertInfo')}</span>
             </label>
           </div>
-          <p className="text-xs text-slate-600 mt-1.5">勾选后，每次扫描完成将自动推送对应内容到所有已启用的渠道</p>
+          <p className="text-xs text-slate-600 mt-1.5">{t('eventAlert.notify.pushContentHint')}</p>
         </div>
 
         {/* 预警推送级别 */}
         <div>
-          <label className="text-sm text-slate-400 block mb-2">预警推送级别 <span className="text-slate-600">(仅当勾选「预警信息」时生效)</span></label>
+          <label className="text-sm text-slate-400 block mb-2">{t('eventAlert.notify.alertPushLevel')} <span className="text-slate-600">({t('eventAlert.notify.alertPushLevelHint')})</span></label>
           <div className="flex gap-2">
             {([
-              { level: 'critical' as AlertLevel, label: '🚨 紧急', color: 'red' },
-              { level: 'warning' as AlertLevel, label: '⚠️ 警告', color: 'amber' },
-              { level: 'info' as AlertLevel, label: 'ℹ️ 信息', color: 'blue' },
+              { level: 'critical' as AlertLevel, label: `🚨 ${t('eventAlert.level.critical')}`, color: 'red' },
+              { level: 'warning' as AlertLevel, label: `⚠️ ${t('eventAlert.level.warning')}`, color: 'amber' },
+              { level: 'info' as AlertLevel, label: `ℹ️ ${t('eventAlert.level.info')}`, color: 'blue' },
             ]).map(({ level, label, color }) => (
               <button
                 key={level}
@@ -307,10 +309,10 @@ function NotificationConfigPanel() {
 
         {/* 免打扰时段 */}
         <div>
-          <label className="text-sm text-slate-400 block mb-2">免打扰时段 <span className="text-slate-600">(紧急事件不受限制)</span></label>
+          <label className="text-sm text-slate-400 block mb-2">{t('eventAlert.notify.quietHours')} <span className="text-slate-600">({t('eventAlert.notify.quietHoursNote')})</span></label>
           <div className="flex items-center gap-2">
             <input className="input-field w-28 text-center text-sm" type="time" value={gps.quietHoursStart} onChange={(e) => updateGps({ quietHoursStart: e.target.value })} />
-            <span className="text-slate-500">至</span>
+            <span className="text-slate-500">{t('eventAlert.notify.to')}</span>
             <input className="input-field w-28 text-center text-sm" type="time" value={gps.quietHoursEnd} onChange={(e) => updateGps({ quietHoursEnd: e.target.value })} />
           </div>
         </div>
@@ -319,10 +321,10 @@ function NotificationConfigPanel() {
       {/* ════════ 渠道列表 + 添加 ════════ */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500">
-          推送渠道 ({configs?.filter(c => c.enabled).length || 0} 个已启用)
+          {t('eventAlert.notify.channels', { count: configs?.filter(c => c.enabled).length || 0 })}
         </p>
         <button className="btn-primary text-sm flex items-center gap-1 shrink-0" onClick={() => { resetForm(); setShowForm(true); }}>
-          <Plus className="w-4 h-4" /> 添加渠道
+          <Plus className="w-4 h-4" /> {t('eventAlert.notify.addChannel')}
         </button>
       </div>
 
@@ -339,29 +341,29 @@ function NotificationConfigPanel() {
                   <div>
                     <span className="font-medium text-sm">{c.channel === 'telegram' ? 'Telegram' : 'WhatsApp'}</span>
                     <p className="text-xs text-slate-600 mt-0.5">
-                      {c.channel === 'telegram' ? `Chat ID: ${c.telegramChatId || '-'}` : `手机: ${c.whatsappPhone || '-'}`}
+                      {c.channel === 'telegram' ? `Chat ID: ${c.telegramChatId || '-'}` : `${t('eventAlert.notify.phone')}: ${c.whatsappPhone || '-'}`}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {testing === c.id ? (
-                    <span className="text-sm text-amber-400"><Loader2 className="w-3 h-3 animate-spin inline" /> 测试中...</span>
+                    <span className="text-sm text-amber-400"><Loader2 className="w-3 h-3 animate-spin inline" /> {t('eventAlert.notify.testing')}</span>
                   ) : (
                     <button className="text-sm px-2 py-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600" onClick={() => handleTest(c)}>
-                      <Send className="w-3 h-3 inline mr-1" />测试
+                      <Send className="w-3 h-3 inline mr-1" />{t('eventAlert.notify.test')}
                     </button>
                   )}
                   <button
                     className="text-sm px-2 py-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600"
                     onClick={() => { if (editingId === c.id) { resetForm(); } else { openEditForm(c); } }}
                   >
-                    <Pencil className="w-3 h-3 inline mr-1" />{editingId === c.id ? '收起' : '编辑'}
+                    <Pencil className="w-3 h-3 inline mr-1" />{editingId === c.id ? t('eventAlert.notify.collapse') : t('eventAlert.notify.edit')}
                   </button>
                   <button
                     className={`text-sm px-2 py-1 rounded ${c.enabled ? 'bg-amber-600/20 text-amber-400' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
                     onClick={() => handleToggle(c.id!, !c.enabled)}
                   >
-                    {c.enabled ? '已启用' : '启用'}
+                    {c.enabled ? t('eventAlert.notify.enabled') : t('eventAlert.notify.enable')}
                   </button>
                   <button className="p-1 text-slate-500 hover:text-red-400" onClick={() => handleDelete(c.id!)}>
                     <Trash2 className="w-4 h-4" />
@@ -388,9 +390,9 @@ function NotificationConfigPanel() {
                 try {
                   const res = await testScanResultPush();
                   if (res.success) {
-                    setTestResult(`✅ 上次扫描结果已推送到 ${res.channels.join(', ')}`);
+                    setTestResult(`✅ ${t('eventAlert.notify.scanPushSuccess', { channels: res.channels.join(', ') })}`);
                   } else {
-                    setTestResult(`❌ ${res.error || '推送失败'}`);
+                    setTestResult(`❌ ${res.error || t('eventAlert.notify.pushFailed')}`);
                   }
                 } catch (err: any) {
                   setTestResult(`❌ ${err.message}`);
@@ -400,7 +402,7 @@ function NotificationConfigPanel() {
               }}
             >
               {testingScan ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-              测试推送上次扫描结果
+              {t('eventAlert.notify.testScanPush')}
             </button>
           </div>
         </div>
@@ -413,6 +415,7 @@ function NotificationConfigPanel() {
 
 // ==================== 主组件: 消息中心 ====================
 export default function EventAlertPage() {
+  const { t } = useTranslation();
   const alerts = useLiveQuery(
     () => db.eventAlerts.orderBy('createdAt').reverse().limit(100).toArray(),
     [],
@@ -435,7 +438,7 @@ export default function EventAlertPage() {
   };
 
   const handleClearAll = async () => {
-    if (!confirm('确定清除所有预警记录？')) return;
+    if (!confirm(t('eventAlert.clearConfirm'))) return;
     await db.eventAlerts.clear();
   };
 
@@ -450,9 +453,9 @@ export default function EventAlertPage() {
     return 'border-l-blue-500';
   };
   const levelLabel = (l: AlertLevel) => {
-    if (l === 'critical') return '紧急';
-    if (l === 'warning') return '警告';
-    return '信息';
+    if (l === 'critical') return t('eventAlert.level.critical');
+    if (l === 'warning') return t('eventAlert.level.warning');
+    return t('eventAlert.level.info');
   };
 
   const unacknowledged = alerts?.filter(a => !a.acknowledgedAt) || [];
@@ -461,10 +464,10 @@ export default function EventAlertPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">消息中心</h1>
+        <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">{t('eventAlert.title')}</h1>
         {alerts && alerts.length > 0 && (
           <button className="btn-secondary text-sm" onClick={handleClearAll}>
-            <Trash2 className="w-4 h-4 inline mr-1" /> 清除全部
+            <Trash2 className="w-4 h-4 inline mr-1" /> {t('eventAlert.clearAll')}
           </button>
         )}
       </div>
@@ -478,7 +481,7 @@ export default function EventAlertPage() {
           <div className="p-2 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.15) 0%, rgba(239,68,68,0.05) 100%)' }}>
             <BellRing className="w-4.5 h-4.5 text-red-400" />
           </div>
-          待处理预警
+          {t('eventAlert.pendingAlerts')}
           {unacknowledged.length > 0 && (
             <span className="text-sm px-2 py-0.5 rounded-full bg-red-600/20 text-red-400">{unacknowledged.length}</span>
           )}
@@ -486,7 +489,7 @@ export default function EventAlertPage() {
         {unacknowledged.length === 0 ? (
           <div className="p-8 text-center text-slate-500">
             <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">暂无待处理的预警事件</p>
+            <p className="text-sm">{t('eventAlert.noPending')}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -504,7 +507,7 @@ export default function EventAlertPage() {
                       </span>
                       <span className="text-sm text-slate-500">{grp?.icon || '🔔'} {grp?.label || alert.group}</span>
                     </div>
-                    <span className="text-sm text-slate-600">{new Date(alert.createdAt).toLocaleString('zh-CN')}</span>
+                    <span className="text-sm text-slate-600">{new Date(alert.createdAt).toLocaleString()}</span>
                   </div>
                   <h4 className="font-medium">{alert.title}</h4>
                   <p className="text-sm text-slate-400 leading-relaxed">{alert.description}</p>
@@ -515,11 +518,11 @@ export default function EventAlertPage() {
                   </div>
                   <div className="flex items-center justify-between pt-2">
                     <div className="flex items-center gap-2 text-sm text-slate-500">
-                      <span>来源: {alert.source}</span>
+                      <span>{t('eventAlert.source')}: {alert.source}</span>
                       {alert.notified && (
                         <span className="text-emerald-400 flex items-center gap-1">
                           <MessageCircle className="w-3 h-3" />
-                          已推送 ({alert.notifyChannels.join(', ')})
+                          {t('eventAlert.pushed')} ({alert.notifyChannels.join(', ')})
                         </span>
                       )}
                     </div>
@@ -531,7 +534,7 @@ export default function EventAlertPage() {
                           disabled={sending === alert.id}
                         >
                           {sending === alert.id ? <Loader2 className="w-3 h-3 animate-spin inline" /> : <Send className="w-3 h-3 inline mr-1" />}
-                          推送
+                          {t('eventAlert.push')}
                         </button>
                       )}
                       <button
@@ -539,7 +542,7 @@ export default function EventAlertPage() {
                         onClick={() => handleAcknowledge(alert.id!)}
                       >
                         <CheckCircle className="w-3 h-3 inline mr-1" />
-                        已知晓
+                        {t('eventAlert.acknowledge')}
                       </button>
                     </div>
                   </div>
@@ -558,7 +561,7 @@ export default function EventAlertPage() {
               <div className="p-2 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(100,116,139,0.15) 0%, rgba(100,116,139,0.05) 100%)' }}>
                 <Bell className="w-4.5 h-4.5 text-slate-400" />
               </div>
-              历史预警
+              {t('eventAlert.historyAlerts')}
               <span className="text-sm text-slate-500 font-normal">({acknowledged.length})</span>
             </summary>
             <div className="space-y-2 mt-4">
@@ -570,7 +573,7 @@ export default function EventAlertPage() {
                       {levelIcon(alert.level)}
                       <span className="text-sm text-slate-500">{grp?.icon || '🔔'} {grp?.label || alert.group}</span>
                       <span className="font-medium text-sm flex-1">{alert.title}</span>
-                      <span className="text-sm text-slate-600">{new Date(alert.createdAt).toLocaleString('zh-CN')}</span>
+                      <span className="text-sm text-slate-600">{new Date(alert.createdAt).toLocaleString()}</span>
                     </div>
                   </div>
                 );

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Download, Upload, Trash2, Info, HardDrive, Timer } from 'lucide-react';
+import { Download, Upload, Trash2, Info, HardDrive, Timer, Globe } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { db } from '../db';
 import { useStore } from '../store/useStore';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -23,6 +24,7 @@ function formatInterval(ms: number): string {
 export default function Settings() {
   const { refreshIntervals, setRefreshIntervals } = useStore();
   const isMobile = useIsMobile();
+  const { t, i18n } = useTranslation();
   const [exportMsg, setExportMsg] = useState('');
 
   const handleExport = async () => {
@@ -42,10 +44,10 @@ export default function Settings() {
       a.download = `aags-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      setExportMsg('导出成功');
+      setExportMsg(t('common.success'));
       setTimeout(() => setExportMsg(''), 3000);
     } catch (err: any) {
-      setExportMsg(`导出失败: ${err.message}`);
+      setExportMsg(`${t('common.failed')}: ${err.message}`);
     }
   };
 
@@ -75,16 +77,16 @@ export default function Settings() {
           await db.equitySnapshots.clear();
           await db.equitySnapshots.bulkAdd(data.equitySnapshots.map((s: any) => { const { id, ...rest } = s; return rest; }));
         }
-        setExportMsg('导入成功，请刷新页面');
+        setExportMsg(t('common.success'));
       } catch (err: any) {
-        setExportMsg(`导入失败: ${err.message}`);
+      setExportMsg(`${t('common.failed')}: ${err.message}`);
       }
     };
     input.click();
   };
 
   const handleClearAll = async () => {
-    if (!confirm('确定要清除所有数据吗？此操作不可撤销！')) return;
+    if (!confirm(t('settings.clearConfirm'))) return;
     await db.delete();
     window.location.reload();
   };
@@ -101,7 +103,7 @@ export default function Settings() {
 
   return (
     <div className={isMobile ? 'space-y-4' : 'space-y-6'}>
-      <h1 className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>系统设置</h1>
+      <h1 className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>{t('settings.title')}</h1>
 
       {/* Data Management */}
       <div className={`card ${isMobile ? 'space-y-3' : 'space-y-4'}`}>
@@ -109,23 +111,23 @@ export default function Settings() {
           <div className="p-2 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(59,130,246,0.05) 100%)' }}>
             <HardDrive className={`${isMobile ? 'w-4 h-4' : 'w-4.5 h-4.5'} text-blue-400`} />
           </div>
-          数据管理
+          {t('settings.dataManagement')}
         </h3>
         <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>
-          {isMobile ? '所有数据存储在本地，建议定期备份。' : '所有数据存储在本地 IndexedDB 中，不会上传到任何服务器。建议定期导出备份。'}
+          {t('settings.securityDesc')}
         </p>
         <div className={`flex flex-wrap ${isMobile ? 'gap-2' : 'gap-3'}`}>
           <button className={`btn-primary flex items-center gap-1.5 ${isMobile ? 'text-xs' : ''}`} onClick={handleExport}>
-            <Download className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> 导出
+            <Download className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> {t('settings.exportData')}
           </button>
           <button className={`btn-secondary flex items-center gap-1.5 ${isMobile ? 'text-xs' : ''}`} onClick={handleImport}>
-            <Upload className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> 导入
+            <Upload className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> {t('settings.importData')}
           </button>
           <button className={`btn-secondary flex items-center gap-1.5 ${isMobile ? 'text-xs' : ''}`} onClick={estimateStorage}>
-            <Info className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> 存储用量
+            <Info className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> Storage
           </button>
           <button className={`btn-danger flex items-center gap-1.5 ${isMobile ? 'text-xs' : ''}`} onClick={handleClearAll}>
-            <Trash2 className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> 清除全部
+            <Trash2 className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> {t('settings.clearAllData')}
           </button>
         </div>
         {exportMsg && <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-blue-400`}>{exportMsg}</p>}
@@ -137,7 +139,7 @@ export default function Settings() {
           <div className="p-2 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.15) 0%, rgba(139,92,246,0.05) 100%)' }}>
             <Timer className={`${isMobile ? 'w-4 h-4' : 'w-4.5 h-4.5'} text-violet-400`} />
           </div>
-          数据刷新间隔
+          {t('settings.refreshInterval')}
         </h3>
         <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>
           {isMobile ? '配置自动刷新频率，间隔越短 API 请求越多。' : '配置各模块的自动刷新频率。间隔越短数据越实时，但会增加 API 请求频率。'}
@@ -186,7 +188,7 @@ export default function Settings() {
 
       {/* Security */}
       <div className={`card ${isMobile ? 'space-y-3' : 'space-y-4'}`}>
-        <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold`}>安全说明</h3>
+        <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold`}>{t('settings.security')}</h3>
         <div className="space-y-3 text-sm text-slate-400">
           <div className="flex items-start gap-3 p-3.5 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(15,23,42,0.3) 100%)', border: '1px solid rgba(16,185,129,0.1)' }}>
             <span className="text-emerald-400 mt-0.5 text-sm">✓</span>
@@ -219,9 +221,34 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Language */}
+      <div className={`card ${isMobile ? 'space-y-3' : 'space-y-4'}`}>
+        <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold flex items-center gap-2`}>
+          <div className="p-2 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.15) 0%, rgba(6,182,212,0.05) 100%)' }}>
+            <Globe className={`${isMobile ? 'w-4 h-4' : 'w-4.5 h-4.5'} text-cyan-400`} />
+          </div>
+          {t('settings.language')}
+        </h3>
+        <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('settings.languageDesc')}</p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { i18n.changeLanguage('zh'); localStorage.setItem('aags_language', 'zh'); }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${i18n.language === 'zh' || i18n.language?.startsWith('zh') ? 'bg-cyan-600/20 border border-cyan-500/40 text-cyan-400' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'}`}
+          >
+            中文
+          </button>
+          <button
+            onClick={() => { i18n.changeLanguage('en'); localStorage.setItem('aags_language', 'en'); }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${i18n.language === 'en' ? 'bg-cyan-600/20 border border-cyan-500/40 text-cyan-400' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'}`}
+          >
+            English
+          </button>
+        </div>
+      </div>
+
       {/* About */}
       <div className={`card ${isMobile ? 'space-y-2' : 'space-y-3'}`}>
-        <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold`}>关于 AAGS</h3>
+        <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold`}>{t('settings.about')}</h3>
         <div className="text-sm text-slate-400 space-y-1">
           <p><span className="text-slate-300">产品名称:</span> Apex Adaptive Grid System</p>
           <p><span className="text-slate-300">版本:</span> 1.0.0</p>

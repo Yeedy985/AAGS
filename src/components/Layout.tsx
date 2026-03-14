@@ -4,32 +4,34 @@ import {
   Newspaper, BellRing, MoreHorizontal, X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/useStore';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-const navItems = [
-  { id: 'dashboard', label: '仪表盘', icon: LayoutDashboard },
-  { id: 'account', label: '账户管理', icon: Wallet },
-  { id: 'market', label: '市场行情', icon: TrendingUp },
-  { id: 'strategies', label: '策略管理', icon: Grid3x3 },
-  { id: 'risk', label: '风险控制', icon: Shield },
-  { id: 'reports', label: '数据报表', icon: BarChart3 },
-  { id: 'sentiment', label: '舆情监控', icon: Newspaper },
-  { id: 'alerts', label: '消息中心', icon: BellRing },
-  { id: 'settings', label: '系统设置', icon: Settings },
+const navItemDefs = [
+  { id: 'dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+  { id: 'account', labelKey: 'nav.account', icon: Wallet },
+  { id: 'market', labelKey: 'nav.market', icon: TrendingUp },
+  { id: 'strategies', labelKey: 'nav.strategy', icon: Grid3x3 },
+  { id: 'risk', labelKey: 'nav.risk', icon: Shield },
+  { id: 'reports', labelKey: 'nav.reports', icon: BarChart3 },
+  { id: 'sentiment', labelKey: 'nav.sentiment', icon: Newspaper },
+  { id: 'alerts', labelKey: 'nav.alerts', icon: BellRing },
+  { id: 'settings', labelKey: 'nav.settings', icon: Settings },
 ];
 
 // 移动端底部栏显示的主要 Tab（最多5个）
 const mobileMainTabs = ['dashboard', 'strategies', 'market', 'account', 'more'];
-const mobileMainNav = navItems.filter(n => mobileMainTabs.includes(n.id));
+const mobileMainNav = navItemDefs.filter(n => mobileMainTabs.includes(n.id));
 // "更多"菜单里的 Tab
-const mobileMoreNav = navItems.filter(n => !mobileMainTabs.includes(n.id));
+const mobileMoreNav = navItemDefs.filter(n => !mobileMainTabs.includes(n.id));
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const { activeTab, setActiveTab, isConnected } = useStore();
   const isMobile = useIsMobile();
+  const { t } = useTranslation();
 
   // ==================== 移动端布局 ====================
   if (isMobile) {
@@ -59,7 +61,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               {isConnected && <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-40" />}
             </div>
             <span className={`text-xs font-medium ${isConnected ? 'text-emerald-400/80' : 'text-red-400/80'}`}>
-              {isConnected ? '已连接' : '未连接'}
+              {isConnected ? t('connection.connected') : t('connection.disconnected')}
             </span>
           </div>
         </header>
@@ -84,7 +86,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-5 py-4">
-                <span className="text-base font-semibold text-slate-200">更多功能</span>
+                <span className="text-base font-semibold text-slate-200">{t('common.more')}</span>
                 <button onClick={() => setMoreOpen(false)} className="p-1 rounded-lg hover:bg-slate-800">
                   <X className="w-5 h-5 text-slate-400" />
                 </button>
@@ -102,7 +104,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       }`}
                     >
                       <Icon className={`w-6 h-6 ${active ? 'text-blue-400' : 'text-slate-400'}`} />
-                      <span className={`text-xs font-medium ${active ? 'text-blue-400' : 'text-slate-500'}`}>{item.label}</span>
+                      <span className={`text-xs font-medium ${active ? 'text-blue-400' : 'text-slate-500'}`}>{t(item.labelKey)}</span>
                     </button>
                   );
                 })}
@@ -133,7 +135,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   }`}
                 >
                   <Icon className="w-5 h-5" />
-                  <span className="text-[10px] font-medium">{item.label}</span>
+                  <span className="text-[10px] font-medium">{t(item.labelKey)}</span>
                 </button>
               );
             })}
@@ -145,7 +147,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               }`}
             >
               <MoreHorizontal className="w-5 h-5" />
-              <span className="text-[10px] font-medium">更多</span>
+              <span className="text-[10px] font-medium">{t('common.more')}</span>
             </button>
           </div>
         </nav>
@@ -174,14 +176,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent leading-tight">
                 AAGS
               </span>
-              <span className="text-[9px] text-slate-500 font-medium tracking-wide">机构级量化，触手可及</span>
+              <span className="text-[9px] text-slate-500 font-medium tracking-wide">{t('settings.aboutDesc')}</span>
             </div>
           )}
         </div>
 
         {/* Nav */}
         <nav className="flex-1 py-3 space-y-0.5 px-2 overflow-y-auto">
-          {navItems.map((item) => {
+          {navItemDefs.map((item) => {
             const Icon = item.icon;
             const active = activeTab === item.id;
             return (
@@ -199,7 +201,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 } : undefined}
               >
                 <Icon className="w-[18px] h-[18px] shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
+                {!collapsed && <span>{t(item.labelKey)}</span>}
               </button>
             );
           })}
@@ -216,7 +218,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
             {!collapsed && (
               <span className={`text-sm font-medium ${isConnected ? 'text-emerald-400/80' : 'text-red-400/80'}`}>
-                {isConnected ? 'Binance 已连接' : '未连接交易所'}
+                {isConnected ? 'Binance ' + t('connection.connected') : t('connection.disconnected')}
               </span>
             )}
           </div>

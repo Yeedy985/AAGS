@@ -203,7 +203,7 @@ async function maybeSyncToPlaza(strategyId: number) {
   const strategy = await db.strategies.get(strategyId);
   if (!strategy) return;
 
-  const totalGridCount = strategy.layers.filter(l => l.enabled).reduce((a, l) => a + l.gridCount, 0);
+  const totalGridCount = (strategy.layers || []).filter(l => l.enabled).reduce((a, l) => a + (l.gridCount || 0), 0);
   const pnlPct = strategy.totalFund > 0 ? (strategy.totalProfit / strategy.totalFund * 100) : 0;
   const runSec = strategy.startedAt ? Math.floor((now - strategy.startedAt) / 1000) : 0;
 
@@ -1117,6 +1117,31 @@ export async function stopStrategy(strategyId: number, apiConfig: ApiConfig): Pr
   await db.strategies.update(strategyId, { status: 'stopped', stoppedAt: Date.now() });
   const stopped = await db.strategies.get(strategyId);
   if (stopped) _onStrategyUpdate?.(stopped);
+
+  // 最后一次同步到策略广场: 通知已停止
+  try {
+    let shareCodes: Record<string, string> = {};
+    const saved = localStorage.getItem('aags_share_codes');
+    if (saved) shareCodes = JSON.parse(saved);
+    const shareCode = shareCodes[strategyId];
+    if (shareCode && stopped) {
+      const totalGridCount = (stopped.layers || []).filter(l => l.enabled).reduce((a, l) => a + (l.gridCount || 0), 0);
+      const pnlPct = stopped.totalFund > 0 ? (stopped.totalProfit / stopped.totalFund * 100) : 0;
+      const runSec = stopped.startedAt ? Math.floor((Date.now() - stopped.startedAt) / 1000) : 0;
+      await syncStrategyData(shareCode, {
+        pnlUsdt: stopped.totalProfit,
+        pnlPercent: pnlPct,
+        runSeconds: runSec,
+        matchCount: stopped.winTrades,
+        totalGrids: totalGridCount,
+        maxDrawdownPct: stopped.maxDrawdown,
+        isRunning: false,
+      });
+      log(strategyId, '[策略广场] 已同步停止状态');
+    }
+  } catch (err: any) {
+    console.warn(`[策略广场] 停止同步失败:`, err.message);
+  }
 }
 
 // ==================== 暂停策略 ====================

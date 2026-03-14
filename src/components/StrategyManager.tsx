@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Trash2, ChevronDown, ChevronUp, Loader2, AlertCircle, Share2, X as XIcon } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/useStore';
 import { db } from '../db';
 import type { Strategy } from '../types';
@@ -11,20 +12,24 @@ import { startStrategy, stopStrategy, pauseStrategy, resumeStrategy, setExecutor
 import { shareStrategy, unshareStrategy } from '../services/strategyPlazaService';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-function formatRuntime(startedAt?: number): string {
+function formatRuntime(startedAt: number | undefined, t: (key: string) => string): string {
   if (!startedAt) return '--';
   const diff = Date.now() - startedAt;
   const days = Math.floor(diff / 86400000);
   const hours = Math.floor((diff % 86400000) / 3600000);
   const mins = Math.floor((diff % 3600000) / 60000);
-  if (days > 0) return `${days}天 ${hours}时 ${mins}分`;
-  if (hours > 0) return `${hours}时 ${mins}分`;
-  return `${mins}分`;
+  const d = t('strategy.runtimeFormat.days');
+  const h = t('strategy.runtimeFormat.hours');
+  const m = t('strategy.runtimeFormat.minutes');
+  if (days > 0) return `${days}${d} ${hours}${h} ${mins}${m}`;
+  if (hours > 0) return `${hours}${h} ${mins}${m}`;
+  return `${mins}${m}`;
 }
 
 export default function StrategyManager() {
   const { strategies, setStrategies, updateStrategy, removeStrategy, apiConfig, symbols, tickers } = useStore();
   const isMobile = useIsMobile();
+  const { t } = useTranslation();
   const [showCreator, setShowCreator] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [operatingIds, setOperatingIds] = useState<Set<number>>(new Set());
@@ -101,7 +106,7 @@ export default function StrategyManager() {
 
   const handleStart = async (strategy: Strategy) => {
     if (!apiConfig) {
-      setErrors(prev => ({ ...prev, [strategy.id!]: '请先在「账户管理」中配置交易所 API Key' }));
+      setErrors(prev => ({ ...prev, [strategy.id!]: t('account.apiKeyRequired') }));
       return;
     }
     setOperatingIds(prev => new Set(prev).add(strategy.id!));
@@ -160,6 +165,7 @@ export default function StrategyManager() {
   const [shareModalStrategy, setShareModalStrategy] = useState<Strategy | null>(null);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState('');
+  const [shareSuccess, setShareSuccess] = useState(false);
   // shareCode 映射: strategyId → shareCode (本地存储)
   const [shareCodes, setShareCodes] = useState<Record<number, string>>({});
 
@@ -189,7 +195,7 @@ export default function StrategyManager() {
     setSharing(true);
     setShareError('');
     try {
-      const totalGridCount = strategy.layers.filter(l => l.enabled).reduce((a, l) => a + l.gridCount, 0);
+      const totalGridCount = (strategy.layers || []).filter(l => l.enabled).reduce((a, l) => a + (l.gridCount || 0), 0);
       const pnlPct = strategy.totalFund > 0 ? (strategy.totalProfit / strategy.totalFund * 100) : 0;
       const runSec = strategy.startedAt ? Math.floor((Date.now() - strategy.startedAt) / 1000) : 0;
 
@@ -231,8 +237,10 @@ export default function StrategyManager() {
       });
       saveShareCode(strategy.id, result.shareCode);
       setShareModalStrategy(null);
+      setShareSuccess(true);
+      setTimeout(() => setShareSuccess(false), 3000);
     } catch (err: any) {
-      setShareError(err.message || '分享失败');
+      setShareError(err.message || t('strategy.shareFailed'));
     }
     setSharing(false);
   };
@@ -244,7 +252,7 @@ export default function StrategyManager() {
       await unshareStrategy(code);
       removeShareCode(strategyId);
     } catch (err: any) {
-      alert('取消分享失败: ' + err.message);
+      alert(t('strategy.unshareFailed') + ': ' + err.message);
     }
   };
 
@@ -254,21 +262,21 @@ export default function StrategyManager() {
   };
 
   const statusLabels: Record<string, { text: string; class: string }> = {
-    idle: { text: '待启动', class: 'badge-blue' },
-    running: { text: '运行中', class: 'badge-green' },
-    paused: { text: '已暂停', class: 'badge-yellow' },
-    stopped: { text: '已停止', class: 'bg-slate-800 text-slate-400 text-sm px-2 py-0.5 rounded-full' },
-    error: { text: '错误', class: 'badge-red' },
-    circuit_break: { text: '熔断中', class: 'bg-orange-900/50 text-orange-400 text-sm px-2 py-0.5 rounded-full' },
+    idle: { text: t('strategy.status.idle'), class: 'badge-blue' },
+    running: { text: t('strategy.status.running'), class: 'badge-green' },
+    paused: { text: t('strategy.status.paused'), class: 'badge-yellow' },
+    stopped: { text: t('strategy.status.stopped'), class: 'bg-slate-800 text-slate-400 text-sm px-2 py-0.5 rounded-full' },
+    error: { text: t('strategy.status.error'), class: 'badge-red' },
+    circuit_break: { text: t('strategy.status.circuitBreak'), class: 'bg-orange-900/50 text-orange-400 text-sm px-2 py-0.5 rounded-full' },
   };
 
   return (
     <div className={isMobile ? 'space-y-3' : 'space-y-4'}>
       <div className="flex items-center justify-between">
-        <h1 className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>策略管理</h1>
+        <h1 className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>{t('strategy.title')}</h1>
         <button className={`btn-primary flex items-center gap-1.5 ${isMobile ? 'text-xs px-3 py-2' : ''}`} onClick={() => setShowCreator(true)}>
           <Plus className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
-          新建策略
+          {t('strategy.createNew')}
         </button>
       </div>
 
@@ -282,20 +290,17 @@ export default function StrategyManager() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md mx-4 rounded-2xl bg-slate-900 border border-slate-700 p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-white">分享策略到策略广场</h3>
+              <h3 className="text-lg font-bold text-white">{t('strategy.shareToPlaza')}</h3>
               <button onClick={() => setShareModalStrategy(null)} className="text-slate-400 hover:text-white"><XIcon className="w-5 h-5" /></button>
             </div>
             <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-              <p className="text-sm text-amber-300 font-medium mb-1">隐私说明</p>
-              <p className="text-xs text-amber-200/70 leading-relaxed">
-                仅上传策略参数和运行收益数据，<strong className="text-amber-200">不会上传任何 API Key、账户信息或个人隐私数据</strong>。
-                其他用户可以看到：交易对、网格配置、收益率、运行时长等。你可以随时取消分享。
-              </p>
+              <p className="text-sm text-amber-300 font-medium mb-1">{t('strategy.sharePrivacy')}</p>
+              <p className="text-xs text-amber-200/70 leading-relaxed" dangerouslySetInnerHTML={{ __html: t('strategy.sharePrivacyDesc') }} />
             </div>
             <div className="mb-4 p-3 rounded-lg bg-slate-800 text-sm">
-              <p className="text-slate-400">策略: <span className="text-white font-medium">{shareModalStrategy.name}</span></p>
-              <p className="text-slate-400 mt-1">交易对: <span className="text-white">{shareModalStrategy.symbol}</span></p>
-              <p className="text-slate-400 mt-1">投资额: <span className="text-white">{shareModalStrategy.totalFund} USDT</span></p>
+              <p className="text-slate-400">{t('strategy.strategyLabel')}: <span className="text-white font-medium">{shareModalStrategy.name}</span></p>
+              <p className="text-slate-400 mt-1">{t('strategy.tradingPair')}: <span className="text-white">{shareModalStrategy.symbol}</span></p>
+              <p className="text-slate-400 mt-1">{t('strategy.investmentAmount')}: <span className="text-white">{shareModalStrategy.totalFund} USDT</span></p>
             </div>
             {shareError && <p className="text-sm text-red-400 mb-3">{shareError}</p>}
             <div className="flex gap-3">
@@ -303,7 +308,7 @@ export default function StrategyManager() {
                 onClick={() => setShareModalStrategy(null)}
                 className="flex-1 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-medium text-slate-300"
               >
-                取消
+                {t('common.cancel')}
               </button>
               <button
                 onClick={() => handleShare(shareModalStrategy)}
@@ -311,10 +316,18 @@ export default function StrategyManager() {
                 className="flex-1 py-2.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-sm font-bold text-white flex items-center justify-center gap-2"
               >
                 {sharing && <Loader2 className="w-4 h-4 animate-spin" />}
-                确认分享
+                {t('strategy.confirmShare')}
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Share Success Toast */}
+      {shareSuccess && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl bg-emerald-600/90 backdrop-blur-sm text-white font-medium text-sm shadow-2xl flex items-center gap-2 animate-fade-in">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+          {t('strategy.shareSuccess')}
         </div>
       )}
 
@@ -324,8 +337,8 @@ export default function StrategyManager() {
         <div className={isMobile ? 'w-full' : 'w-[45%] shrink-0 overflow-y-auto'}>
       {strategies.length === 0 ? (
         <div className={`card ${isMobile ? 'py-10' : 'py-16'} text-center`}>
-          <p className={`text-slate-500 ${isMobile ? 'text-base' : 'text-lg'}`}>暂无策略</p>
-          <p className={`text-slate-600 ${isMobile ? 'text-xs' : 'text-sm'} mt-2`}>点击"新建策略"开始创建您的第一个网格交易策略</p>
+          <p className={`text-slate-500 ${isMobile ? 'text-base' : 'text-lg'}`}>{t('strategy.noStrategies')}</p>
+          <p className={`text-slate-600 ${isMobile ? 'text-xs' : 'text-sm'} mt-2`}>{t('strategy.noStrategiesDesc')}</p>
         </div>
       ) : (
         <div className={isMobile ? 'space-y-3' : 'space-y-4'}>
@@ -334,7 +347,7 @@ export default function StrategyManager() {
             const isExpanded = expandedId === s.id;
             const ticker = tickers.get(s.symbol);
             const latestPrice = ticker ? parseFloat(ticker.price) : 0;
-            const totalGridCount = s.layers.filter(l => l.enabled).reduce((a, l) => a + l.gridCount, 0);
+            const totalGridCount = (s.layers || []).filter(l => l.enabled).reduce((a, l) => a + (l.gridCount || 0), 0);
             const perGridQty = s.totalFund > 0 && totalGridCount > 0 && latestPrice > 0
               ? (s.totalFund / totalGridCount / latestPrice)
               : 0;
@@ -370,7 +383,7 @@ export default function StrategyManager() {
               <div key={s.id} className={`${isMobile ? 'rounded-xl' : 'rounded-2xl'} overflow-hidden transition-all duration-300 hover:shadow-lg`} style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,15,30,0.85) 100%)', border: '1px solid rgba(51,65,85,0.35)', boxShadow: '0 4px 24px -4px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.02) inset' }}>
                 {/* === Row 1: Symbol + Status === */}
                 <div className={`flex items-center justify-between ${isMobile ? 'px-3 pt-2.5' : 'px-5 pt-4'} pb-0.5`}>
-                  <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>现货网格</span>
+                  <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('strategy.spotGrid')}</span>
                 </div>
                 <div className={`flex items-center justify-between ${isMobile ? 'px-3' : 'px-5'} pb-1.5`}>
                   <h3 className={`${isMobile ? 'text-base' : 'text-xl'} font-bold`}>{s.symbol.replace('USDT', '')}/USDT</h3>
@@ -387,8 +400,8 @@ export default function StrategyManager() {
                 <div className={`${isMobile ? 'px-3 pb-2' : 'px-5 pb-4'}`}>
                   <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>
                     {isMobile
-                      ? (s.startedAt ? `运行 ${formatRuntime(s.startedAt)}` : '未启动')
-                      : `创建时间 ${new Date(s.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}${s.startedAt ? `, 运行时间 ${formatRuntime(s.startedAt)}` : ''}`
+                      ? (s.startedAt ? `${t('strategy.running')} ${formatRuntime(s.startedAt, t)}` : t('strategy.notStarted'))
+                      : `${t('strategy.createdTime')} ${new Date(s.createdAt).toLocaleString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}${s.startedAt ? `, ${t('strategy.runtime')} ${formatRuntime(s.startedAt, t)}` : ''}`
                     }
                   </p>
                 </div>
@@ -396,20 +409,20 @@ export default function StrategyManager() {
                 {/* === Row 3: grid — Investment / Price Range / Grid Count === */}
                 <div className={`grid ${isMobile ? 'grid-cols-2 gap-x-2 gap-y-1.5 px-3' : 'grid-cols-3 gap-4 px-5'} pb-2.5`}>
                   <div>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{isMobile ? '投资额' : '总投资额 (USDT)'}</p>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{isMobile ? t('strategy.investmentShort') : t('strategy.totalInvestment')}</p>
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold`}>{s.totalFund.toFixed(isMobile ? 2 : 5)}</p>
                   </div>
                   <div>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{isMobile ? '价格范围' : '价格范围 (USDT)'}</p>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{isMobile ? t('strategy.priceRangeShort') : t('strategy.priceRange')}</p>
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold`}>{s.lowerPrice.toFixed(isMobile ? 2 : 5)} - {s.upperPrice.toFixed(isMobile ? 2 : 5)}</p>
                   </div>
                   <div>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>网格数量</p>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{t('strategy.gridCount')}</p>
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold`}>{totalGridCount}</p>
                   </div>
                   {isMobile && (
                     <div>
-                      <p className="text-xs text-slate-500 mb-0.5">最新价</p>
+                      <p className="text-xs text-slate-500 mb-0.5">{t('strategy.latestPrice')}</p>
                       <p className="text-xs font-semibold">{latestPrice > 0 ? latestPrice.toFixed(latestPrice < 1 ? 5 : 2) : '--'}</p>
                     </div>
                   )}
@@ -418,7 +431,7 @@ export default function StrategyManager() {
                 {/* === Row 4: Total Profit / Grid Profit / Unrealized PnL === */}
                 <div className={`grid grid-cols-3 ${isMobile ? 'gap-1 px-3' : 'gap-4 px-5'} pb-2.5`}>
                   <div>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{isMobile ? '总收益' : '总收益(USDT)'}</p>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{isMobile ? t('strategy.totalReturnShort') : t('strategy.totalReturn')}</p>
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold ${totalReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {totalReturn >= 0 ? '+' : ''}{totalReturn.toFixed(isMobile ? 2 : 5)}
                     </p>
@@ -427,7 +440,7 @@ export default function StrategyManager() {
                     </p>
                   </div>
                   <div>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{isMobile ? '网格利润' : '网格利润(USDT)'}</p>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{isMobile ? t('strategy.gridProfitShort') : t('strategy.gridProfit')}</p>
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold ${gridProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {gridProfit >= 0 ? '+' : ''}{gridProfit.toFixed(isMobile ? 2 : 5)}
                     </p>
@@ -436,7 +449,7 @@ export default function StrategyManager() {
                     </p>
                   </div>
                   <div>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{isMobile ? '浮动盈亏' : '浮动盈亏(USDT)'}</p>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{isMobile ? t('strategy.unrealizedPnlShort') : t('strategy.unrealizedPnl')}</p>
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold ${unrealizedPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {unrealizedPnl >= 0 ? '+' : ''}{unrealizedPnl.toFixed(isMobile ? 2 : 5)}
                     </p>
@@ -449,11 +462,11 @@ export default function StrategyManager() {
                 {/* === Row 5: Qty per trade / Matched count / Latest price === */}
                 <div className={`grid ${isMobile ? 'grid-cols-2 gap-1 px-3' : 'grid-cols-3 gap-4 px-5'} pb-3`}>
                   <div>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{isMobile ? '每笔数量' : `每笔数量 (${s.baseAsset})`}</p>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{isMobile ? t('strategy.qtyPerTrade') : `${t('strategy.qtyPerTrade')} (${s.baseAsset})`}</p>
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold`}>{perGridQty > 0 ? perGridQty.toFixed(perGridQty < 1 ? 5 : 2) : '--'}</p>
                   </div>
                   <div>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>成交/配对</p>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{t('strategy.matchPair')}</p>
                     {(() => {
                       const trades = allTradeRecords.filter(t => t.strategyId === s.id);
                       const tradeGroups = new Map<string, { buys: number; sells: number }>();
@@ -464,12 +477,12 @@ export default function StrategyManager() {
                         tradeGroups.set(k, g);
                       }
                       const pairs = Array.from(tradeGroups.values()).reduce((sum, g) => sum + Math.min(g.buys, g.sells), 0);
-                      return <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold`}>{trades.length}笔 / {pairs}对</p>;
+                      return <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold`}>{trades.length}{t('strategy.trades')} / {pairs}{t('strategy.pairs')}</p>;
                     })()}
                   </div>
                   {!isMobile && (
                     <div>
-                      <p className="text-sm text-slate-500 mb-0.5">最新价 (USDT)</p>
+                      <p className="text-sm text-slate-500 mb-0.5">{t('strategy.latestPriceUsdt')}</p>
                       <p className="text-sm font-semibold">{latestPrice > 0 ? latestPrice.toFixed(latestPrice < 1 ? 5 : 2) : '--'}</p>
                     </div>
                   )}
@@ -503,7 +516,7 @@ export default function StrategyManager() {
                           }`}
                         >
                           <p className={`${isMobile ? 'text-base' : 'text-lg'} font-bold ${activeTab === 'placed' ? 'text-amber-400' : 'text-slate-300'}`}>{placedCount}</p>
-                          <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium ${activeTab === 'placed' ? 'text-amber-400' : 'text-slate-500'}`}>挂单</p>
+                          <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium ${activeTab === 'placed' ? 'text-amber-400' : 'text-slate-500'}`}>{t('strategy.pendingOrders')}</p>
                         </button>
                         <div className="w-px bg-slate-700 self-stretch" />
                         <button
@@ -515,7 +528,7 @@ export default function StrategyManager() {
                           }`}
                         >
                           <p className={`${isMobile ? 'text-base' : 'text-lg'} font-bold ${activeTab === 'filled' ? 'text-emerald-400' : 'text-slate-300'}`}>{filledCount}</p>
-                          <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium ${activeTab === 'filled' ? 'text-emerald-400' : 'text-slate-500'}`}>成交</p>
+                          <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium ${activeTab === 'filled' ? 'text-emerald-400' : 'text-slate-500'}`}>{t('strategy.filledOrders')}</p>
                         </button>
                       </div>
 
@@ -525,8 +538,8 @@ export default function StrategyManager() {
                           {/* Buy orders column */}
                           <div className="rounded-lg border border-emerald-900/40 overflow-hidden">
                             <div className={`${isMobile ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} bg-emerald-900/20 font-medium text-emerald-400 flex justify-between`}>
-                              <span>买单 ({buyOrders.length})</span>
-                              <span>价格 / 数量</span>
+                              <span>{t('strategy.buyOrders')} ({buyOrders.length})</span>
+                              <span>{t('strategy.priceQty')}</span>
                             </div>
                             <div className={`${isMobile ? 'max-h-40' : 'max-h-52'} overflow-y-auto divide-y divide-slate-800/50`}>
                               {buyOrders.length > 0 ? buyOrders.map((o, i) => (
@@ -534,21 +547,21 @@ export default function StrategyManager() {
                                   <span className={`font-medium ${
                                     o.layer === 'trend' ? 'text-blue-400' : o.layer === 'swing' ? 'text-teal-400' : 'text-orange-400'
                                   }`}>
-                                    {o.layer === 'trend' ? '趋势' : o.layer === 'swing' ? '震荡' : '插针'}
+                                    {t(`strategy.layer.${o.layer}`)}
                                   </span>
                                   <span className="text-emerald-400 font-mono">{priceFmt(o.price)}</span>
                                   <span className="text-slate-400 font-mono">{qtyFmt(o.quantity)}</span>
                                 </div>
                               )) : (
-                                <div className={`py-3 text-center ${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>无买单</div>
+                                <div className={`py-3 text-center ${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>{t('strategy.noBuyOrders')}</div>
                               )}
                             </div>
                           </div>
                           {/* Sell orders column */}
                           <div className="rounded-lg border border-red-900/40 overflow-hidden">
                             <div className={`${isMobile ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} bg-red-900/20 font-medium text-red-400 flex justify-between`}>
-                              <span>卖单 ({sellOrders.length})</span>
-                              <span>价格 / 数量</span>
+                              <span>{t('strategy.sellOrders')} ({sellOrders.length})</span>
+                              <span>{t('strategy.priceQty')}</span>
                             </div>
                             <div className={`${isMobile ? 'max-h-40' : 'max-h-52'} overflow-y-auto divide-y divide-slate-800/50`}>
                               {sellOrders.length > 0 ? sellOrders.map((o, i) => (
@@ -556,13 +569,13 @@ export default function StrategyManager() {
                                   <span className={`font-medium ${
                                     o.layer === 'trend' ? 'text-blue-400' : o.layer === 'swing' ? 'text-teal-400' : 'text-orange-400'
                                   }`}>
-                                    {o.layer === 'trend' ? '趋势' : o.layer === 'swing' ? '震荡' : '插针'}
+                                    {t(`strategy.layer.${o.layer}`)}
                                   </span>
                                   <span className="text-red-400 font-mono">{priceFmt(o.price)}</span>
                                   <span className="text-slate-400 font-mono">{qtyFmt(o.quantity)}</span>
                                 </div>
                               )) : (
-                                <div className={`py-3 text-center ${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>无卖单</div>
+                                <div className={`py-3 text-center ${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>{t('strategy.noSellOrders')}</div>
                               )}
                             </div>
                           </div>
@@ -608,10 +621,10 @@ export default function StrategyManager() {
                             {/* 汇总栏 */}
                             <div className={`flex items-center justify-between ${isMobile ? 'px-2 py-2' : 'px-3 py-2.5'} bg-slate-800/80 border-b border-slate-700`}>
                               <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-400`}>
-                                {trades.length}笔成交 · {pairsCount}对配对
+                                {t('strategy.tradesSummary', { trades: trades.length, pairs: pairsCount })}
                               </span>
                               <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-bold font-mono ${totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {isMobile ? '' : '总利润: '}{totalProfit >= 0 ? '+' : ''}{totalProfit.toFixed(4)}
+                                {isMobile ? '' : t('strategy.totalProfit') + ': '}{totalProfit >= 0 ? '+' : ''}{totalProfit.toFixed(4)}
                               </span>
                             </div>
                             {/* 表格 - 横向滚动 */}
@@ -619,23 +632,23 @@ export default function StrategyManager() {
                               <table className={`w-full min-w-[700px] ${isMobile ? 'text-xs' : 'text-sm'}`}>
                                 <thead>
                                   <tr className="bg-slate-800/50 text-slate-500 text-left">
-                                    <th className="px-3 py-2 font-medium">日期</th>
-                                    <th className="px-3 py-2 font-medium">订单号</th>
-                                    <th className="px-3 py-2 font-medium">网格</th>
-                                    <th className="px-3 py-2 font-medium">方向</th>
-                                    <th className="px-3 py-2 font-medium text-right">挂单价</th>
-                                    <th className="px-3 py-2 font-medium text-right">成交价</th>
-                                    <th className="px-3 py-2 font-medium text-right">数量</th>
-                                    <th className="px-3 py-2 font-medium text-right">成交金额</th>
-                                    <th className="px-3 py-2 font-medium text-right">手续费</th>
-                                    <th className="px-3 py-2 font-medium text-right">利润</th>
+                                    <th className="px-3 py-2 font-medium">{t('strategy.table.date')}</th>
+                                    <th className="px-3 py-2 font-medium">{t('strategy.table.orderId')}</th>
+                                    <th className="px-3 py-2 font-medium">{t('strategy.table.grid')}</th>
+                                    <th className="px-3 py-2 font-medium">{t('strategy.table.direction')}</th>
+                                    <th className="px-3 py-2 font-medium text-right">{t('strategy.table.orderPrice')}</th>
+                                    <th className="px-3 py-2 font-medium text-right">{t('strategy.table.fillPrice')}</th>
+                                    <th className="px-3 py-2 font-medium text-right">{t('strategy.table.quantity')}</th>
+                                    <th className="px-3 py-2 font-medium text-right">{t('strategy.table.amount')}</th>
+                                    <th className="px-3 py-2 font-medium text-right">{t('strategy.table.fee')}</th>
+                                    <th className="px-3 py-2 font-medium text-right">{t('strategy.table.profit')}</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-800/50">
                                   {trades.map((t, idx) => {
                                     const orderPrice = orderPriceMap.get(t.binanceTradeId);
                                     const pairProfit = profitMap.get(t.binanceTradeId);
-                                    const layerLabel = t.layer === 'trend' ? '趋势' : t.layer === 'swing' ? '震荡' : '插针';
+                                    const layerLabel = t.layer === 'trend' ? 'Trend' : t.layer === 'swing' ? 'Swing' : 'Spike';
                                     const layerColor = t.layer === 'trend' ? 'text-blue-400' : t.layer === 'swing' ? 'text-emerald-400' : 'text-orange-400';
 
                                     return (
@@ -649,7 +662,7 @@ export default function StrategyManager() {
                                               ? 'bg-emerald-500/15 text-emerald-400'
                                               : 'bg-red-500/15 text-red-400'
                                           }`}>
-                                            {t.side === 'buy' ? '买入' : '卖出'}
+                                            {t.side === 'buy' ? 'Buy' : 'Sell'}
                                           </span>
                                         </td>
                                         <td className="px-3 py-2 text-right font-mono text-slate-400">{orderPrice ? priceFmt(orderPrice) : '--'}</td>
@@ -663,7 +676,7 @@ export default function StrategyManager() {
                                         }`}>
                                           {pairProfit !== undefined
                                             ? `${pairProfit >= 0 ? '+' : ''}${pairProfit.toFixed(4)}`
-                                            : t.side === 'buy' ? '待配对' : '--'}
+                                            : t.side === 'buy' ? 'Pending' : '--'}
                                         </td>
                                       </tr>
                                     );
@@ -676,11 +689,11 @@ export default function StrategyManager() {
                       })()}
 
                       {activeTab === 'filled' && allTradeRecords.filter(t => t.strategyId === s.id).length === 0 && (
-                        <div className={`${isMobile ? 'mx-3 mb-3' : 'mx-5 mb-4'} py-4 text-center ${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>暂无成交记录</div>
+                        <div className={`${isMobile ? 'mx-3 mb-3' : 'mx-5 mb-4'} py-4 text-center ${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>{t('strategy.noTradeRecords')}</div>
                       )}
                       {activeTab && activeTab === 'placed' && filteredOrders.length === 0 && (
                         <div className={`${isMobile ? 'mx-3 mb-3' : 'mx-5 mb-4'} py-4 text-center ${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>
-                          暂无挂单订单
+                          {t('strategy.noPendingOrders')}
                         </div>
                       )}
                     </>
@@ -700,7 +713,7 @@ export default function StrategyManager() {
                           className={`flex-1 ${isMobile ? 'py-2 text-xs' : 'py-2.5 text-sm'} rounded-lg bg-slate-800 hover:bg-slate-700 font-medium text-slate-200 transition-colors`}
                           onClick={() => handleStop(s)}
                         >
-                          终止
+                          {t('common.stop')}
                         </button>
                       )}
                       {(s.status === 'idle' || s.status === 'stopped') && (
@@ -708,7 +721,7 @@ export default function StrategyManager() {
                           className={`flex-1 ${isMobile ? 'py-2 text-xs' : 'py-2.5 text-sm'} rounded-lg bg-emerald-600 hover:bg-emerald-500 font-medium text-white transition-colors`}
                           onClick={() => handleStart(s)}
                         >
-                          启动
+                          {t('common.start')}
                         </button>
                       )}
                       {s.status === 'running' && (
@@ -716,7 +729,7 @@ export default function StrategyManager() {
                           className={`flex-1 ${isMobile ? 'py-2 text-xs' : 'py-2.5 text-sm'} rounded-lg bg-yellow-600/20 hover:bg-yellow-600/30 font-medium text-yellow-400 transition-colors border border-yellow-600/30`}
                           onClick={() => handlePause(s)}
                         >
-                          暂停
+                          {t('common.pause')}
                         </button>
                       )}
                       {s.status === 'paused' && (
@@ -724,13 +737,13 @@ export default function StrategyManager() {
                           className={`flex-1 ${isMobile ? 'py-2 text-xs' : 'py-2.5 text-sm'} rounded-lg bg-emerald-600 hover:bg-emerald-500 font-medium text-white transition-colors`}
                           onClick={() => handleStart(s)}
                         >
-                          恢复
+                          {t('common.resume')}
                         </button>
                       )}
                       <button
                         className={`${isMobile ? 'p-2' : 'p-2.5'} rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors`}
                         onClick={() => setExpandedId(isExpanded ? null : s.id!)}
-                        title="详情"
+                        title={t('common.details')}
                       >
                         {isExpanded ? <ChevronUp className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} /> : <ChevronDown className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />}
                       </button>
@@ -739,7 +752,7 @@ export default function StrategyManager() {
                         <button
                           className={`${isMobile ? 'p-2' : 'p-2.5'} rounded-lg bg-cyan-900/20 hover:bg-cyan-900/30 text-cyan-400 transition-colors`}
                           onClick={() => handleUnshare(s.id!)}
-                          title="取消分享"
+                          title={t('strategy.cancelShare')}
                         >
                           <Share2 className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
                         </button>
@@ -747,7 +760,7 @@ export default function StrategyManager() {
                         <button
                           className={`${isMobile ? 'p-2' : 'p-2.5'} rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors`}
                           onClick={() => setShareModalStrategy(s)}
-                          title="分享到策略广场"
+                          title={t('strategy.shareToPlaza')}
                         >
                           <Share2 className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
                         </button>
@@ -756,7 +769,7 @@ export default function StrategyManager() {
                         <button
                           className={`${isMobile ? 'p-2' : 'p-2.5'} rounded-lg bg-red-900/20 hover:bg-red-900/30 text-red-400 transition-colors`}
                           onClick={() => handleDelete(s.id!)}
-                          title="删除"
+                          title={t('common.delete')}
                         >
                           <Trash2 className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
                         </button>
@@ -777,7 +790,7 @@ export default function StrategyManager() {
                 {/* Logs */}
                 {isExpanded && logs[s.id!] && logs[s.id!].length > 0 && (
                   <div className={`${isMobile ? 'mx-3 mb-3 p-2' : 'mx-5 mb-4 p-3'} rounded-lg bg-slate-950 border border-slate-800 max-h-32 overflow-y-auto`}>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mb-1`}>执行日志</p>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mb-1`}>{t('strategy.executionLog')}</p>
                     {logs[s.id!].map((l, i) => (
                       <p key={i} className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 font-mono`}>{l}</p>
                     ))}

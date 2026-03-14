@@ -14,6 +14,7 @@ import {
   BarChart3, Activity, Shield, ArrowUpRight, ArrowDownRight,
   FileText,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const LAYER_COLORS: Record<string, string> = {
   trend: '#3b82f6',
@@ -21,11 +22,7 @@ const LAYER_COLORS: Record<string, string> = {
   spike: '#f97316',
 };
 
-const LAYER_NAMES: Record<string, string> = {
-  trend: '趋势核心层',
-  swing: '震荡波动层',
-  spike: '插针收割层',
-};
+// LAYER_NAMES moved inside component to use t()
 
 const TOOLTIP_STYLE = {
   backgroundColor: 'rgba(15,23,42,0.95)',
@@ -70,8 +67,15 @@ function ReportStatCard({ title, value, sub, icon: Icon, color, trend }: {
 
 export default function Reports() {
   const { strategies } = useStore();
+  const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'all'>('week');
+
+  const LAYER_NAMES: Record<string, string> = {
+    trend: t('strategy.layerFull.trend'),
+    swing: t('strategy.layerFull.swing'),
+    spike: t('strategy.layerFull.spike'),
+  };
 
   useEffect(() => {
     if (selectedId === null && strategies.length > 0) {
@@ -251,15 +255,15 @@ export default function Reports() {
     };
   }, [selected, trades, period]);
 
-  const periodLabel = period === 'day' ? '今日' : period === 'week' ? '近7天' : period === 'month' ? '近30天' : '全部';
+  const periodLabel = t(`reports.periodLabel.${period}`);
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">数据报表</h1>
+        <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">{t('reports.title')}</h1>
         {selected && (
           <span className="text-xs text-slate-500">
-            {selected.symbol} · {periodLabel} · {summaryStats?.totalTrades ?? 0} 笔交易
+            {selected.symbol} · {periodLabel} · {t('reports.tradesCount', { count: summaryStats?.totalTrades ?? 0 })}
           </span>
         )}
       </div>
@@ -267,8 +271,8 @@ export default function Reports() {
       {strategies.length === 0 ? (
         <div className="card py-20 text-center">
           <FileText className="w-12 h-12 mx-auto mb-3 text-slate-600" />
-          <p className="text-slate-400 font-medium">暂无策略数据</p>
-          <p className="text-sm text-slate-600 mt-1">创建并运行策略后，交易数据将自动记录在此</p>
+          <p className="text-slate-400 font-medium">{t('reports.noStrategyData')}</p>
+          <p className="text-sm text-slate-600 mt-1">{t('reports.noStrategyDataDesc')}</p>
         </div>
       ) : (
         <>
@@ -294,7 +298,7 @@ export default function Reports() {
               ))}
             </div>
             <div className="flex gap-0.5 rounded-lg p-0.5" style={{ background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(51,65,85,0.3)' }}>
-              {([['day', '日'], ['week', '周'], ['month', '月'], ['all', '全部']] as const).map(([key, label]) => (
+              {(['day', 'week', 'month', 'all'] as const).map((key) => (
                 <button
                   key={key}
                   onClick={() => setPeriod(key)}
@@ -304,7 +308,7 @@ export default function Reports() {
                       : 'text-slate-500 hover:text-slate-300'
                   }`}
                 >
-                  {label}
+                  {t(`reports.period.${key}`)}
                 </button>
               ))}
             </div>
@@ -314,48 +318,48 @@ export default function Reports() {
           {summaryStats && (
             <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2.5">
               <ReportStatCard
-                title={`${periodLabel}收益`}
+                title={t('reports.periodReturn', { period: periodLabel })}
                 value={`${summaryStats.totalProfit >= 0 ? '+' : ''}$${summaryStats.totalProfit.toFixed(2)}`}
                 icon={DollarSign}
                 color="green"
                 trend={summaryStats.totalProfit > 0 ? 'up' : summaryStats.totalProfit < 0 ? 'down' : 'neutral'}
               />
               <ReportStatCard
-                title="胜率"
+                title={t('reports.winRate')}
                 value={`${summaryStats.winRate}%`}
-                sub={`${summaryStats.winCount}胜 ${summaryStats.loseCount}负`}
+                sub={t('reports.winLose', { win: summaryStats.winCount, lose: summaryStats.loseCount })}
                 icon={Target}
                 color="yellow"
               />
               <ReportStatCard
-                title="总交易"
+                title={t('reports.totalTrades')}
                 value={String(summaryStats.totalTrades)}
-                sub={`${periodLabel}数据`}
+                sub={t('reports.periodData', { period: periodLabel })}
                 icon={BarChart3}
                 color="blue"
               />
               <ReportStatCard
-                title="均笔收益"
+                title={t('reports.avgProfit')}
                 value={`$${summaryStats.avgProfit.toFixed(4)}`}
                 icon={Activity}
                 color="cyan"
                 trend={summaryStats.avgProfit > 0 ? 'up' : summaryStats.avgProfit < 0 ? 'down' : 'neutral'}
               />
               <ReportStatCard
-                title="日均收益"
+                title={t('reports.dailyReturn')}
                 value={`$${summaryStats.dailyReturn.toFixed(2)}`}
                 icon={Calendar}
                 color="orange"
               />
               <ReportStatCard
-                title="年化收益"
+                title={t('reports.annualReturn')}
                 value={`${summaryStats.annualReturn.toFixed(1)}%`}
-                sub={`运行${summaryStats.daysRunning}天`}
+                sub={t('reports.runDays', { days: summaryStats.daysRunning })}
                 icon={TrendingUp}
                 color="purple"
               />
               <ReportStatCard
-                title="最大回撤"
+                title={t('reports.maxDrawdown')}
                 value={`${summaryStats.maxDrawdown.toFixed(2)}%`}
                 icon={Shield}
                 color="red"
@@ -370,10 +374,10 @@ export default function Reports() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-blue-400" />
-                  策略净值曲线
+                  {t('reports.equityCurve')}
                 </h3>
                 {equityData.length > 0 && (
-                  <span className="text-xs text-slate-600">{equityData.length} 个数据点</span>
+                  <span className="text-xs text-slate-600">{t('reports.dataPoints', { count: equityData.length })}</span>
                 )}
               </div>
               {equityData.length > 0 ? (
@@ -391,13 +395,13 @@ export default function Reports() {
                     <Tooltip
                       contentStyle={TOOLTIP_STYLE}
                       labelStyle={{ color: '#94a3b8', fontSize: 11, marginBottom: 4 }}
-                      formatter={(v: any) => [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, '净值']}
+                      formatter={(v: any) => [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, t('reports.netValue')]}
                     />
                     <Area type="monotone" dataKey="total" stroke="#3b82f6" fill="url(#reportGrad)" strokeWidth={2} dot={false} />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <EmptyChart text="暂无净值数据" sub="策略运行后将自动记录资产变化" />
+                <EmptyChart text={t('reports.emptyEquity')} sub={t('reports.emptyEquityDesc')} />
               )}
             </div>
 
@@ -406,14 +410,14 @@ export default function Reports() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-orange-400" />
-                  每日盈亏
+                  {t('reports.dailyPnl')}
                 </h3>
                 {dailyPnL.length > 0 && (() => {
                   const totalPnl = dailyPnL.reduce((s, d) => s + d.pnl, 0);
                   const winDays = dailyPnL.filter(d => d.pnl > 0).length;
                   return (
                     <span className="text-xs text-slate-600">
-                      {winDays}/{dailyPnL.length} 天盈利 · 合计 <span className={totalPnl >= 0 ? 'text-emerald-500' : 'text-red-400'}>{totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(2)}</span>
+                      {t('reports.profitDays', { win: winDays, total: dailyPnL.length })} · {t('reports.total')} <span className={totalPnl >= 0 ? 'text-emerald-500' : 'text-red-400'}>{totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(2)}</span>
                     </span>
                   );
                 })()}
@@ -430,10 +434,10 @@ export default function Reports() {
                       labelStyle={{ color: '#94a3b8', fontSize: 11, marginBottom: 4 }}
                       formatter={(v: any, _: any, props: any) => {
                         const entry = props.payload;
-                        return [`$${Number(v).toFixed(4)} (${entry.count}笔)`, '盈亏'];
+                        return [t('reports.pnlWithCount', { amount: Number(v).toFixed(4), count: entry.count }), t('reports.pnlAmount')];
                       }}
                     />
-                    <Bar dataKey="pnl" name="盈亏" radius={[3, 3, 0, 0]}>
+                    <Bar dataKey="pnl" name={t('reports.pnlAmount')} radius={[3, 3, 0, 0]}>
                       {dailyPnL.map((entry, i) => (
                         <Cell key={i} fill={entry.pnl >= 0 ? '#f97316' : '#3b82f6'} fillOpacity={0.85} />
                       ))}
@@ -441,7 +445,7 @@ export default function Reports() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <EmptyChart text="暂无交易记录" sub="完成交易后将按日汇总盈亏" />
+                <EmptyChart text={t('reports.emptyTrades')} sub={t('reports.emptyTradesDesc')} />
               )}
             </div>
           </div>
@@ -453,7 +457,7 @@ export default function Reports() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
                   <ArrowUpRight className="w-4 h-4 text-purple-400" />
-                  累计收益曲线
+                  {t('reports.cumulativePnl')}
                 </h3>
                 {cumulativePnL.length > 0 && (
                   <span className={`text-xs font-medium ${cumulativePnL[cumulativePnL.length - 1].cumulative >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -479,14 +483,14 @@ export default function Reports() {
                       labelStyle={{ color: '#94a3b8', fontSize: 11, marginBottom: 4 }}
                       formatter={(v: any, name: any) => [
                         `$${Number(v).toFixed(4)}`,
-                        name === 'cumulative' ? '累计收益' : '当日盈亏',
+                        name === 'cumulative' ? t('reports.cumulativeReturn') : t('reports.dailyPnlLabel'),
                       ]}
                     />
                     <Area type="monotone" dataKey="cumulative" stroke="#8b5cf6" fill="url(#cumulGrad)" strokeWidth={2} dot={false} name="cumulative" />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <EmptyChart text="暂无累计数据" sub="交易数据将自动汇总" />
+                <EmptyChart text={t('reports.emptyCumulative')} sub={t('reports.emptyCumulativeDesc')} />
               )}
             </div>
 
@@ -495,7 +499,7 @@ export default function Reports() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
                   <Target className="w-4 h-4 text-cyan-400" />
-                  各层收益分布
+                  {t('reports.layerDistribution')}
                 </h3>
               </div>
               {layerPieData.length > 0 ? (
@@ -520,7 +524,7 @@ export default function Reports() {
                         contentStyle={TOOLTIP_STYLE}
                         formatter={(v: any, name: any) => {
                           const item = layerPieData.find(d => d.name === name);
-                          return [`${item?.profit && item.profit >= 0 ? '+' : ''}$${item?.profit?.toFixed(4) ?? v} (${item?.count ?? 0}笔)`, name];
+                          return [`${item?.profit && item.profit >= 0 ? '+' : ''}$${item?.profit?.toFixed(4) ?? v} (${item?.count ?? 0})`, name];
                         }}
                       />
                     </PieChart>
@@ -535,7 +539,7 @@ export default function Reports() {
                             <p className={`text-sm font-bold ${entry.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                               {entry.profit >= 0 ? '+' : ''}${entry.profit.toFixed(4)}
                             </p>
-                            <span className="text-xs text-slate-600">{entry.count}笔</span>
+                            <span className="text-xs text-slate-600">{entry.count}</span>
                           </div>
                         </div>
                       </div>
@@ -543,7 +547,7 @@ export default function Reports() {
                   </div>
                 </div>
               ) : (
-                <EmptyChart text="暂无层级数据" sub="交易后将按趋势/震荡/插针层分类统计" />
+                <EmptyChart text={t('reports.emptyLayer')} sub={t('reports.emptyLayerDesc')} />
               )}
             </div>
 

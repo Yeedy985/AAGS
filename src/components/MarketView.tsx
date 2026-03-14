@@ -3,10 +3,12 @@ import { Search, ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { getExchangeInfo, getTicker24h } from '../services/binance';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useTranslation } from 'react-i18next';
 
 export default function MarketView() {
   const { symbols, setSymbols, tickers, setTickers, setSelectedSymbol, setActiveTab, refreshIntervals } = useStore();
   const isMobile = useIsMobile();
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [sortBy, setSortBy] = useState<'volume' | 'change' | 'name'>('volume');
@@ -55,10 +57,10 @@ export default function MarketView() {
   return (
     <div className={isMobile ? 'space-y-3' : 'space-y-6'}>
       <div className="flex items-center justify-between">
-        <h1 className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>市场行情</h1>
+        <h1 className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>{t('market.title')}</h1>
         <button className={`btn-secondary flex items-center gap-1.5 ${isMobile ? 'text-xs' : 'text-sm'}`} onClick={loadData} disabled={loading}>
           <RefreshCw className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} ${loading ? 'animate-spin' : ''}`} />
-          刷新
+          {t('common.refresh')}
         </button>
       </div>
 
@@ -68,13 +70,13 @@ export default function MarketView() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <input
             className="input-field pl-10"
-            placeholder="搜索交易对，如 BTC、ETH..."
+            placeholder={t('market.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <div className="flex gap-1">
-          {([['volume', '成交量'], ['change', '涨跌幅'], ['name', '名称']] as const).map(([key, label]) => (
+          {(['volume', 'change', 'name'] as const).map((key) => (
             <button
               key={key}
               onClick={() => setSortBy(key)}
@@ -85,7 +87,7 @@ export default function MarketView() {
               }`}
               style={sortBy === key ? { background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)', boxShadow: '0 2px 10px -2px rgba(99,102,241,0.4)' } : { background: 'rgba(30,41,59,0.6)', border: '1px solid rgba(51,65,85,0.3)' }}
             >
-              {label}
+              {t(`market.sortOptions.${key}`)}
             </button>
           ))}
         </div>
@@ -96,25 +98,25 @@ export default function MarketView() {
         <table className={`w-full ${isMobile ? 'text-xs' : 'text-sm'}`}>
           <thead>
             <tr className={`text-slate-500 ${isMobile ? 'text-xs' : 'text-sm'} font-medium`} style={{ borderBottom: '1px solid rgba(51,65,85,0.4)' }}>
-              <th className={`text-left ${isMobile ? 'py-2 px-2' : 'py-3 px-3'}`}>交易对</th>
-              <th className={`text-right ${isMobile ? 'py-2 px-2' : 'py-3 px-3'}`}>最新价</th>
-              <th className={`text-right ${isMobile ? 'py-2 px-2' : 'py-3 px-3'}`}>24h涨跌</th>
-              {!isMobile && <th className="text-right py-3 px-3">成交额</th>}
-              <th className={`text-right ${isMobile ? 'py-2 px-1' : 'py-3 px-3'}`}>操作</th>
+              <th className={`text-left ${isMobile ? 'py-2 px-2' : 'py-3 px-3'}`}>{t('market.table.pair')}</th>
+              <th className={`text-right ${isMobile ? 'py-2 px-2' : 'py-3 px-3'}`}>{t('market.table.price')}</th>
+              <th className={`text-right ${isMobile ? 'py-2 px-2' : 'py-3 px-3'}`}>{t('market.table.change24h')}</th>
+              {!isMobile && <th className="text-right py-3 px-3">{t('market.table.volume')}</th>}
+              <th className={`text-right ${isMobile ? 'py-2 px-1' : 'py-3 px-3'}`}>{t('market.table.action')}</th>
             </tr>
           </thead>
           <tbody>
-            {filteredTickers.map((t) => {
-              const change = parseFloat(t.priceChangePercent);
+            {filteredTickers.map((ticker) => {
+              const change = parseFloat(ticker.priceChangePercent);
               const isUp = change >= 0;
-              const vol = parseFloat(t.quoteVolume);
+              const vol = parseFloat(ticker.quoteVolume);
               return (
-                <tr key={t.symbol} className="transition-all duration-150 hover:bg-white/[0.02]" style={{ borderBottom: '1px solid rgba(51,65,85,0.25)' }}>
+                <tr key={ticker.symbol} className="transition-all duration-150 hover:bg-white/[0.02]" style={{ borderBottom: '1px solid rgba(51,65,85,0.25)' }}>
                   <td className={`${isMobile ? 'py-2 px-2' : 'py-3 px-3'}`}>
-                    <span className="font-medium">{t.symbol.replace('USDT', '')}</span>
+                    <span className="font-medium">{ticker.symbol.replace('USDT', '')}</span>
                     {!isMobile && <span className="text-slate-500">/USDT</span>}
                   </td>
-                  <td className={`text-right ${isMobile ? 'py-2 px-2' : 'py-3 px-3'} font-mono`}>{parseFloat(t.price).toLocaleString()}</td>
+                  <td className={`text-right ${isMobile ? 'py-2 px-2' : 'py-3 px-3'} font-mono`}>{parseFloat(ticker.price).toLocaleString()}</td>
                   <td className={`text-right ${isMobile ? 'py-2 px-2' : 'py-3 px-3'} font-medium ${isUp ? 'text-emerald-400' : 'text-red-400'}`}>
                     <span className="inline-flex items-center gap-0.5">
                       {isUp ? <ArrowUpRight className={isMobile ? 'w-3 h-3' : 'w-3.5 h-3.5'} /> : <ArrowDownRight className={isMobile ? 'w-3 h-3' : 'w-3.5 h-3.5'} />}
@@ -132,9 +134,9 @@ export default function MarketView() {
                   <td className={`text-right ${isMobile ? 'py-2 px-1' : 'py-3 px-3'}`}>
                     <button
                       className={`text-blue-400 hover:text-blue-300 ${isMobile ? 'text-xs' : 'text-sm'}`}
-                      onClick={() => handleSelect(t.symbol)}
+                      onClick={() => handleSelect(ticker.symbol)}
                     >
-                      {isMobile ? '创建' : '创建策略'}
+                      {isMobile ? t('market.createShort') : t('market.createStrategy')}
                     </button>
                   </td>
                 </tr>
@@ -144,7 +146,7 @@ export default function MarketView() {
         </table>
         {filteredTickers.length === 0 && (
           <div className={`${isMobile ? 'py-8' : 'py-12'} text-center text-slate-600 ${isMobile ? 'text-sm' : ''}`}>
-            {loading ? '加载中...' : '未找到匹配的交易对'}
+            {loading ? t('common.loading') : t('market.noResults')}
           </div>
         )}
       </div>

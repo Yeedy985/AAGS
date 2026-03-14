@@ -4,7 +4,8 @@
  * 支持筛选、排序、复制
  */
 import { useState, useEffect, useCallback } from 'react';
-import { Users, RefreshCw, ChevronDown, Loader2, TrendingUp, Clock, Wallet, BarChart3, AlertTriangle } from 'lucide-react';
+import { RefreshCw, ChevronDown, Loader2, BarChart3, AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { fetchPlazaStrategies, fetchPlazaStrategyDetail, recordCopy } from '../services/strategyPlazaService';
 import type { PlazaStrategyItem } from '../services/strategyPlazaService';
 import type { Strategy } from '../types';
@@ -15,36 +16,49 @@ interface Props {
   onCopyStrategy?: (strategy: Strategy) => void;
 }
 
-function formatRuntime(seconds: number): string {
+function formatRuntime(seconds: number, t: (key: string) => string): string {
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
-  if (days > 0) return `${days}天 ${hours}时 ${mins}分`;
-  if (hours > 0) return `${hours}时 ${mins}分`;
-  return `${mins}分`;
+  const d = t('strategy.runtimeFormat.days');
+  const h = t('strategy.runtimeFormat.hours');
+  const m = t('strategy.runtimeFormat.minutes');
+  if (days > 0) return `${days}${d} ${hours}${h} ${mins}${m}`;
+  if (hours > 0) return `${hours}${h} ${mins}${m}`;
+  return `${mins}${m}`;
 }
 
-// 迷你收益曲线 SVG
-function MiniChart({ points, positive }: { points: number[]; positive: boolean }) {
+// 收益曲线 SVG (币安风格，较大)
+function PnlChart({ points, positive, width = 120, height = 40 }: { points: number[]; positive: boolean; width?: number; height?: number }) {
   if (!points || points.length < 2) return null;
-  const width = 80;
-  const height = 28;
   const min = Math.min(...points);
   const max = Math.max(...points);
   const range = max - min || 1;
   const step = width / (points.length - 1);
+  const color = positive ? '#0ecb81' : '#f6465d';
 
   const pathData = points
     .map((p, i) => {
       const x = i * step;
-      const y = height - ((p - min) / range) * (height - 4) - 2;
+      const y = height - ((p - min) / range) * (height - 6) - 3;
       return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(' ');
 
+  // 渐变填充区域
+  const lastX = (points.length - 1) * step;
+  const areaData = `${pathData} L${lastX.toFixed(1)},${height} L0,${height} Z`;
+
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0">
-      <path d={pathData} fill="none" stroke={positive ? '#10b981' : '#ef4444'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <defs>
+        <linearGradient id={`grad-${positive ? 'up' : 'down'}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaData} fill={`url(#grad-${positive ? 'up' : 'down'})`} />
+      <path d={pathData} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -53,6 +67,7 @@ type SortOption = 'pnl' | 'copies' | 'newest' | 'runtime';
 
 export default function StrategyPlaza({ onCopyStrategy }: Props) {
   const isMobile = useIsMobile();
+  const { t } = useTranslation();
   const [items, setItems] = useState<PlazaStrategyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -70,10 +85,10 @@ export default function StrategyPlaza({ onCopyStrategy }: Props) {
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
 
   const sortLabels: Record<SortOption, string> = {
-    pnl: '收益率最高',
-    copies: '复制最多',
-    newest: '最新分享',
-    runtime: '运行最久',
+    pnl: t('plaza.sortOptions.pnl'),
+    copies: t('plaza.sortOptions.copies'),
+    newest: t('plaza.sortOptions.newest'),
+    runtime: t('plaza.sortOptions.runtime'),
   };
 
   const loadData = useCallback(async () => {
@@ -90,7 +105,7 @@ export default function StrategyPlaza({ onCopyStrategy }: Props) {
       setTotalPages(res.totalPages);
       setTotal(res.total);
     } catch (err: any) {
-      setError(err.message || '加载失败');
+      setError(err.message || t('plaza.loadFailed'));
     }
     setLoading(false);
   }, [page, sort, symbolFilter]);
@@ -107,7 +122,7 @@ export default function StrategyPlaza({ onCopyStrategy }: Props) {
       // 从 gridConfig 构建本地 Strategy
       const config = detail.gridConfig || {};
       const strategy: Strategy = {
-        name: `[复制] ${detail.strategyName}`,
+        name: `${t('plaza.copyPrefix')} ${detail.strategyName}`,
         symbol: detail.symbol,
         baseAsset: detail.baseAsset,
         quoteAsset: detail.quoteAsset || 'USDT',
@@ -151,7 +166,7 @@ export default function StrategyPlaza({ onCopyStrategy }: Props) {
       setCopySuccess(item.shareCode);
       setTimeout(() => setCopySuccess(null), 2000);
     } catch (err: any) {
-      alert('复制失败: ' + (err.message || '未知错误'));
+      alert(t('plaza.copyFailed') + ': ' + (err.message || ''));
     }
     setCopyingCode(null);
   };
@@ -161,14 +176,14 @@ export default function StrategyPlaza({ onCopyStrategy }: Props) {
       {/* Header */}
       <div className={`flex items-center justify-between ${isMobile ? 'mb-2' : 'mb-4'}`}>
         <div className="flex items-center gap-2">
-          <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-bold text-slate-200`}>策略广场</h2>
-          {total > 0 && <span className="text-xs text-slate-500">共 {total} 个策略</span>}
+          <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-bold text-slate-200`}>{t('plaza.title')}</h2>
+          {total > 0 && <span className="text-xs text-slate-500">{t('plaza.totalStrategies', { count: total })}</span>}
         </div>
         <button
           onClick={loadData}
           disabled={loading}
           className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
-          title="刷新"
+          title={t('common.refresh')}
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
@@ -179,7 +194,7 @@ export default function StrategyPlaza({ onCopyStrategy }: Props) {
         {/* Symbol filter */}
         <input
           type="text"
-          placeholder="搜索交易对..."
+          placeholder={t('plaza.searchPair')}
           value={symbolFilter}
           onChange={(e) => { setSymbolFilter(e.target.value.toUpperCase()); setPage(1); }}
           className={`${isMobile ? 'w-28 text-xs px-2 py-1.5' : 'w-36 text-sm px-3 py-2'} rounded-lg bg-slate-800/60 border border-slate-700 text-white placeholder-slate-600 focus:border-cyan-500/50 focus:outline-none`}
@@ -220,13 +235,13 @@ export default function StrategyPlaza({ onCopyStrategy }: Props) {
           <div className="text-center py-10">
             <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto mb-2" />
             <p className="text-sm text-slate-400">{error}</p>
-            <button onClick={loadData} className="mt-3 text-xs text-cyan-400 hover:text-cyan-300">重试</button>
+            <button onClick={loadData} className="mt-3 text-xs text-cyan-400 hover:text-cyan-300">{t('common.retry')}</button>
           </div>
         ) : items.length === 0 ? (
           <div className="text-center py-16">
             <BarChart3 className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-            <p className="text-sm text-slate-500">暂无策略</p>
-            <p className="text-xs text-slate-600 mt-1">成为第一个分享策略的人吧</p>
+            <p className="text-sm text-slate-500">{t('plaza.noStrategies')}</p>
+            <p className="text-xs text-slate-600 mt-1">{t('plaza.beFirst')}</p>
           </div>
         ) : (
           <div className={`grid ${isMobile ? 'grid-cols-1 gap-2' : 'grid-cols-1 gap-3'}`}>
@@ -252,7 +267,7 @@ export default function StrategyPlaza({ onCopyStrategy }: Props) {
             onClick={() => setPage(p => p - 1)}
             className="text-xs px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300"
           >
-            上一页
+            {t('plaza.prevPage')}
           </button>
           <span className="text-xs text-slate-500">{page} / {totalPages}</span>
           <button
@@ -260,7 +275,7 @@ export default function StrategyPlaza({ onCopyStrategy }: Props) {
             onClick={() => setPage(p => p + 1)}
             className="text-xs px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300"
           >
-            下一页
+            {t('plaza.nextPage')}
           </button>
         </div>
       )}
@@ -268,7 +283,7 @@ export default function StrategyPlaza({ onCopyStrategy }: Props) {
   );
 }
 
-// ── 策略卡片 (币安风格) ──
+// ── 策略卡片 (完全对标币安网格策略广场) ──
 function StrategyCard({ item, isMobile, onCopy, copying, copied }: {
   item: PlazaStrategyItem;
   isMobile: boolean;
@@ -276,101 +291,82 @@ function StrategyCard({ item, isMobile, onCopy, copying, copied }: {
   copying: boolean;
   copied: boolean;
 }) {
+  const { t } = useTranslation();
   const positive = item.pnlPercent >= 0;
-  const isOnline = item.lastSyncAt && (Date.now() - new Date(item.lastSyncAt).getTime() < 3600_000);
 
   return (
     <div
-      className={`${isMobile ? 'rounded-xl p-3' : 'rounded-xl p-4'} border transition-all hover:border-slate-600`}
+      className={`${isMobile ? 'rounded-xl p-3.5' : 'rounded-2xl p-5'} border transition-all hover:border-slate-600`}
       style={{
-        background: 'linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(10,15,30,0.9) 100%)',
-        borderColor: 'rgba(51,65,85,0.4)',
+        background: '#181A20',
+        borderColor: 'rgba(43,47,54,0.8)',
       }}
     >
-      {/* Row 1: Symbol + Copy button */}
-      <div className="flex items-start justify-between mb-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className={`${isMobile ? 'text-sm' : 'text-base'} font-bold text-white`}>
-              {item.baseAsset}/{item.quoteAsset}
-            </span>
-            <span className="text-xs text-slate-500">
-              共{item.totalGrids}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">{item.strategyName}</p>
+      {/* Row 1: Symbol + Grids badge + online dot ── 右侧: 复制按钮 */}
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <span className={`${isMobile ? 'text-sm' : 'text-[15px]'} font-bold text-white tracking-tight`}>
+            {item.baseAsset}/{item.quoteAsset}
+          </span>
+          <span className="text-[11px] text-slate-500 bg-[#2B2F36] px-1.5 py-0.5 rounded font-medium">
+            {t('plaza.totalGrids', { count: item.totalGrids })}
+          </span>
+          <span className="relative flex h-2 w-2">
+            {item.isRunning && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40" />}
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${item.isRunning ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+          </span>
         </div>
         <button
           onClick={onCopy}
           disabled={copying}
-          className={`${isMobile ? 'px-3 py-1 text-xs' : 'px-4 py-1.5 text-xs'} rounded-lg font-bold transition-all ${
+          className={`${isMobile ? 'px-3 py-1 text-xs' : 'px-4 py-1.5 text-xs'} rounded font-bold transition-all ${
             copied
-              ? 'bg-emerald-600 text-white'
-              : 'bg-amber-500 hover:bg-amber-400 text-slate-900'
+              ? 'bg-emerald-500 text-white'
+              : 'bg-[#F0B90B] hover:bg-[#F8D12F] text-[#181A20]'
           }`}
         >
-          {copying ? <Loader2 className="w-3 h-3 animate-spin" /> : copied ? '已复制' : '复制'}
+          {copying ? <Loader2 className="w-3 h-3 animate-spin" /> : copied ? '✓' : t('common.copy')}
         </button>
       </div>
 
-      {/* Row 2: PnL + Mini chart */}
-      <div className="flex items-center justify-between mb-3">
+      {/* Row 2: 盈亏标签 + 收益曲线 (右侧) */}
+      <div className="flex items-end justify-between mb-0.5">
         <div>
-          <p className={`${isMobile ? 'text-xs' : 'text-xs'} text-slate-500 mb-0.5`}>盈亏 (USDT)</p>
-          <p className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold ${positive ? 'text-emerald-400' : 'text-red-400'}`}>
-            {positive ? '+' : ''}{item.pnlUsdt.toFixed(2)}
+          <p className="text-[11px] text-slate-500 mb-1">{t('plaza.pnlUsdt')}</p>
+          <p className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold tabular-nums tracking-tight leading-none ${positive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+            {positive ? '+' : ''}{item.pnlUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
-        <MiniChart points={item.chartPoints || []} positive={positive} />
+        <PnlChart points={item.chartPoints || []} positive={positive} width={isMobile ? 90 : 120} height={isMobile ? 32 : 40} />
       </div>
 
-      {/* Row 3: Stats grid */}
-      <div className={`grid grid-cols-3 gap-3 ${isMobile ? 'text-xs' : 'text-xs'}`}>
+      {/* Row 3: 收益率 / 运行时间 / 最小投资额 (3列) */}
+      <div className={`grid grid-cols-3 gap-x-3 mt-3 ${isMobile ? '' : ''}`}>
         <div>
-          <p className="text-slate-500 mb-0.5 flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" /> 收益率
-          </p>
-          <p className={`font-semibold ${positive ? 'text-emerald-400' : 'text-red-400'}`}>
+          <p className="text-[11px] text-slate-500 mb-0.5">{t('plaza.returnRate')}</p>
+          <p className={`text-[13px] font-bold ${positive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
             {positive ? '+' : ''}{item.pnlPercent.toFixed(2)}%
           </p>
         </div>
         <div>
-          <p className="text-slate-500 mb-0.5 flex items-center gap-1">
-            <Clock className="w-3 h-3" /> 运行时间
-          </p>
-          <p className="font-semibold text-slate-200">{formatRuntime(item.runSeconds)}</p>
+          <p className="text-[11px] text-slate-500 mb-0.5">{t('plaza.runtimeLabel')}</p>
+          <p className="text-[13px] font-semibold text-slate-200">{formatRuntime(item.runSeconds, t)}</p>
         </div>
         <div>
-          <p className="text-slate-500 mb-0.5 flex items-center gap-1">
-            <Wallet className="w-3 h-3" /> 最小投资
-          </p>
-          <p className="font-semibold text-slate-200">{item.minInvestUsdt.toFixed(2)} USDT</p>
+          <p className="text-[11px] text-slate-500 mb-0.5">{t('plaza.minInvest')}</p>
+          <p className="text-[13px] font-semibold text-slate-200">{item.minInvestUsdt.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT</p>
         </div>
       </div>
 
-      {/* Row 4: Match count / Drawdown / Users */}
-      <div className={`grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-slate-800/60 ${isMobile ? 'text-xs' : 'text-xs'}`}>
+      {/* Row 4: 24h/总匹配次数 / 7天最大回撤 (2列) */}
+      <div className={`grid grid-cols-2 gap-x-3 mt-2.5 pt-2.5 border-t border-[#2B2F36]`}>
         <div>
-          <p className="text-slate-500 mb-0.5">配对次数</p>
-          <p className="font-semibold text-slate-300">{item.matchCount}/{item.totalGrids}</p>
+          <p className="text-[11px] text-slate-500 mb-0.5">{t('plaza.matchCount')}</p>
+          <p className="text-[13px] font-semibold text-slate-300">{item.matchCount}/{item.totalGrids}</p>
         </div>
         <div>
-          <p className="text-slate-500 mb-0.5">7天最大回撤</p>
-          <p className="font-semibold text-slate-300">{item.maxDrawdownPct.toFixed(2)}%</p>
-        </div>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-slate-500 mb-0.5 flex items-center gap-1">
-              <Users className="w-3 h-3" /> 使用人数
-            </p>
-            <p className="font-semibold text-slate-300">{item.copyCount}人</p>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full ${item.isRunning && isOnline ? 'bg-emerald-400' : 'bg-slate-600'}`} />
-            <span className={`text-xs ${item.isRunning && isOnline ? 'text-emerald-400' : 'text-slate-600'}`}>
-              {item.isRunning && isOnline ? '运行中' : '离线'}
-            </span>
-          </div>
+          <p className="text-[11px] text-slate-500 mb-0.5">{t('plaza.maxDrawdown7d')}</p>
+          <p className="text-[13px] font-semibold text-slate-300">{item.maxDrawdownPct.toFixed(2)}%</p>
         </div>
       </div>
     </div>

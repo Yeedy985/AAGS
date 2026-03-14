@@ -8,6 +8,7 @@ import { EXCHANGE_LIST, needsPassphrase, getExchangeConfig } from '../services/e
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { ApiConfig, ExchangeType, AssetBalance } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useTranslation } from 'react-i18next';
 
 interface AccountBalanceInfo {
   balances: AssetBalance[];
@@ -19,6 +20,7 @@ interface AccountBalanceInfo {
 export default function AccountManager() {
   const { apiConfig, setApiConfig, accountInfo, setAccountInfo, setIsConnected, refreshIntervals } = useStore();
   const isMobile = useIsMobile();
+  const { t } = useTranslation();
   const [selectedExchange, setSelectedExchange] = useState<ExchangeType>('binance');
   const [apiKey, setApiKey] = useState('');
   const [apiSecret, setApiSecret] = useState('');
@@ -102,7 +104,7 @@ export default function AccountManager() {
     } catch (err: any) {
       setAccountBalances(prev => ({
         ...prev,
-        [config.id!]: { balances: [], totalUsdt: 0, loading: false, error: err.message || '加载失败' },
+        [config.id!]: { balances: [], totalUsdt: 0, loading: false, error: err.message || t('common.failed') },
       }));
     }
   }, []);
@@ -132,11 +134,11 @@ export default function AccountManager() {
 
   const handleSave = async () => {
     if (!apiKey || !apiSecret) {
-      setError('请填写 API Key 和 Secret');
+      setError(t('account.fillApiKeyAndSecret'));
       return;
     }
     if (requiresPassphrase && !passphrase) {
-      setError(`${exchangeConfig.name} 需要填写 Passphrase`);
+      setError(t('account.passphraseRequired', { name: exchangeConfig.name }));
       return;
     }
     setLoading(true);
@@ -150,14 +152,14 @@ export default function AccountManager() {
         apiKey: trimmedKey,
         apiSecret: encryptedSecret,
         passphrase: requiresPassphrase ? encrypt(passphrase.trim()) : undefined,
-        label: label || `${exchangeConfig.name} 账户`,
+        label: label || `${exchangeConfig.name} ${t('account.defaultLabel')}`,
         createdAt: Date.now(),
       };
       const id = await db.apiConfigs.add(config);
       config.id = id;
       setApiConfig(config);
       setCurrentExchange(selectedExchange);
-      setSuccess(`${exchangeConfig.name} API Key 保存成功`);
+      setSuccess(t('account.saveSuccess', { name: exchangeConfig.name }));
       setApiKey('');
       setApiSecret('');
       setPassphrase('');
@@ -182,7 +184,7 @@ export default function AccountManager() {
     setApiConfig(config);
     setCurrentExchange(config.exchange || 'binance');
     const cfg = getExchangeConfig(config.exchange || 'binance');
-    setSuccess(`已切换到 ${cfg.logo} ${config.label}`);
+    setSuccess(t('account.switchedTo', { logo: cfg.logo, label: config.label }));
     setTimeout(() => setSuccess(''), 2000);
   };
 
@@ -248,16 +250,16 @@ export default function AccountManager() {
 
   return (
     <div className={isMobile ? 'space-y-3' : 'space-y-6'}>
-      <h1 className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>账户管理</h1>
+      <h1 className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>{t('account.title')}</h1>
 
       {/* Exchange Selector */}
       <div className="card space-y-4">
         <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold flex items-center gap-2`}>
           <Key className={`${isMobile ? 'w-4 h-4' : 'w-5 h-5'} text-blue-400`} />
-          {isMobile ? '添加 API Key' : '选择交易所 & 添加 API Key'}
+          {isMobile ? t('account.addApiKey') : t('account.addApiKeyFull')}
         </h3>
         <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>
-          选择要连接的交易所，填写 API Key。仅需开启现货交易权限，请勿开启提币权限。所有密钥 AES 加密存储在本地。
+          {t('account.addApiKeyDesc')}
         </p>
 
         {/* Exchange Grid */}
@@ -302,7 +304,7 @@ export default function AccountManager() {
               rel="noopener noreferrer"
               className={`flex items-center gap-1 ${isMobile ? 'text-xs' : 'text-sm'} text-blue-400 hover:text-blue-300 transition-colors`}
             >
-              API 文档 <ExternalLink className="w-3 h-3" />
+              {t('account.apiDocs')} <ExternalLink className="w-3 h-3" />
             </a>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -313,7 +315,7 @@ export default function AccountManager() {
             ))}
             {requiresPassphrase && (
               <span className={`px-2 py-0.5 rounded-full bg-amber-900/30 ${isMobile ? 'text-xs' : 'text-sm'} text-amber-400 border border-amber-700/30`}>
-                需要 Passphrase
+                {t('account.needsPassphrase')}
               </span>
             )}
           </div>
@@ -322,30 +324,30 @@ export default function AccountManager() {
         {/* API Key Form */}
         <div className={`grid grid-cols-1 ${isMobile ? '' : 'md:grid-cols-2'} ${isMobile ? 'gap-3' : 'gap-4'}`}>
           <div>
-            <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-400 block mb-1`}>标签名称</label>
+            <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-400 block mb-1`}>{t('account.label')}</label>
             <input
               className="input-field"
-              placeholder={`如：${exchangeConfig.name.split(' ')[0]} 主账户`}
+              placeholder={t('account.labelPlaceholder', { name: exchangeConfig.name.split(' ')[0] })}
               value={label}
               onChange={(e) => setLabel(e.target.value)}
             />
           </div>
           <div>
-            <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-400 block mb-1`}>API Key</label>
+            <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-400 block mb-1`}>{t('account.apiKey')}</label>
             <input
               className="input-field"
-              placeholder="输入 API Key"
+              placeholder={t('account.enterApiKey')}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
             />
           </div>
           <div>
-            <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-400 block mb-1`}>API Secret</label>
+            <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-400 block mb-1`}>{t('account.apiSecret')}</label>
             <div className="relative">
               <input
                 className="input-field pr-10"
                 type={showSecret ? 'text' : 'password'}
-                placeholder="输入 API Secret"
+                placeholder={t('account.enterApiSecret')}
                 value={apiSecret}
                 onChange={(e) => setApiSecret(e.target.value)}
               />
@@ -365,7 +367,7 @@ export default function AccountManager() {
               <input
                 className="input-field"
                 type="password"
-                placeholder={`输入 ${exchangeConfig.name.split(' ')[0]} Passphrase`}
+                placeholder={t('account.enterPassphrase', { name: exchangeConfig.name.split(' ')[0] })}
                 value={passphrase}
                 onChange={(e) => setPassphrase(e.target.value)}
               />
@@ -374,7 +376,7 @@ export default function AccountManager() {
         </div>
         <div className={`flex ${isMobile ? 'flex-col gap-2' : 'items-center gap-3'}`}>
           <button className={`btn-primary ${isMobile ? 'text-xs py-2' : ''}`} onClick={handleSave} disabled={loading}>
-            {loading ? '保存中...' : `保存 ${exchangeConfig.name.split(' ')[0]} 账户`}
+            {loading ? t('account.saving') : t('account.saveAccount', { name: exchangeConfig.name.split(' ')[0] })}
           </button>
           {error && (
             <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-red-400 flex items-center gap-1`}>
@@ -394,7 +396,7 @@ export default function AccountManager() {
         <div className={`card ${isMobile ? 'space-y-2' : 'space-y-3'}`}>
           <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold flex items-center gap-2`}>
             <Wallet className={`${isMobile ? 'w-4 h-4' : 'w-5 h-5'} text-blue-400`} />
-            已保存的账户
+            {t('account.savedAccounts')}
           </h3>
           {savedConfigs.map((config) => {
             const cfg = getExchangeConfig(config.exchange || 'binance');
@@ -436,7 +438,7 @@ export default function AccountManager() {
                       <Loader2 className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} text-blue-400 animate-spin`} />
                     ) : balInfo?.error ? (
                       <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-red-400 flex items-center gap-1`}>
-                        <AlertCircle className="w-3 h-3" /> 失败
+                        <AlertCircle className="w-3 h-3" /> {t('common.failed')}
                       </span>
                     ) : balInfo ? (
                       <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-bold text-blue-400`}>
@@ -444,7 +446,7 @@ export default function AccountManager() {
                       </span>
                     ) : null}
                     {isActive && (
-                      <span className="badge-green">当前使用</span>
+                      <span className="badge-green">{t('account.currentlyUsed')}</span>
                     )}
                     <button
                       className="p-1 rounded text-slate-500 hover:text-slate-300 transition-colors"
@@ -466,7 +468,7 @@ export default function AccountManager() {
                   <div className={`${isMobile ? 'px-3 pb-3' : 'px-4 pb-4'} border-t border-slate-800/50`}>
                     {balInfo?.loading ? (
                       <div className={`flex items-center gap-2 py-4 ${isMobile ? 'text-xs' : 'text-sm'} text-blue-400`}>
-                        <Loader2 className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} animate-spin`} /> 正在加载资产数据...
+                        <Loader2 className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} animate-spin`} /> {t('account.loadingAssets')}
                       </div>
                     ) : balInfo?.error ? (
                       <div className="py-4 space-y-2">
@@ -475,13 +477,13 @@ export default function AccountManager() {
                           className={`${isMobile ? 'text-xs' : 'text-sm'} text-blue-400 hover:text-blue-300`}
                           onClick={() => fetchAccountBalances(config)}
                         >
-                          重试连接
+                          {t('connection.retryConnection')}
                         </button>
                       </div>
                     ) : balInfo && balInfo.balances.length > 0 ? (
                       <div className={`pt-3 ${isMobile ? 'space-y-2' : 'space-y-3'}`}>
                         <div className="flex items-center justify-between">
-                          <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-400`}>总资产估值</span>
+                          <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-400`}>{t('account.totalAssets')}</span>
                           <div className="flex items-center gap-2">
                             <span className={`${isMobile ? 'text-base' : 'text-lg'} font-bold text-blue-400`}>
                               ${balInfo.totalUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -489,7 +491,7 @@ export default function AccountManager() {
                             <button
                               className="p-1 rounded text-slate-500 hover:text-blue-400 transition-colors"
                               onClick={() => fetchAccountBalances(config)}
-                              title="刷新"
+                              title={t('common.refresh')}
                             >
                               <RefreshCw className="w-3.5 h-3.5" />
                             </button>
@@ -498,13 +500,13 @@ export default function AccountManager() {
                         {/* 最小显示价值过滤器 */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>最小显示价值</span>
+                            <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('account.minDisplayValue')}</span>
                             <select
                               className="select-field text-xs py-0.5 px-2 w-auto"
                               value={minDisplayValue}
                               onChange={(e) => handleMinValueChange(Number(e.target.value))}
                             >
-                              <option value={0}>全部显示</option>
+                              <option value={0}>{t('account.showAll')}</option>
                               <option value={0.01}>≥ $0.01</option>
                               <option value={0.1}>≥ $0.1</option>
                               <option value={1}>≥ $1</option>
@@ -515,18 +517,18 @@ export default function AccountManager() {
                             </select>
                           </div>
                           <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>
-                            {balInfo.balances.filter(b => b.usdtValue >= minDisplayValue).length}/{balInfo.balances.length} 币种
+                            {balInfo.balances.filter(b => b.usdtValue >= minDisplayValue).length}/{balInfo.balances.length} {t('account.coins')}
                           </span>
                         </div>
                         <div className="overflow-x-auto">
                           <table className={`w-full ${isMobile ? 'text-xs' : 'text-sm'}`}>
                             <thead>
                               <tr className="text-slate-500 border-b border-slate-800">
-                                <th className={`text-left py-1.5 px-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>币种</th>
-                                <th className={`text-right py-1.5 px-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>可用</th>
-                                <th className={`text-right py-1.5 px-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>冻结</th>
-                                <th className={`text-right py-1.5 px-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>估值</th>
-                                <th className={`text-right py-1.5 px-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>占比</th>
+                                <th className={`text-left py-1.5 px-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>{t('account.asset')}</th>
+                                <th className={`text-right py-1.5 px-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>{t('account.available')}</th>
+                                <th className={`text-right py-1.5 px-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>{t('account.locked')}</th>
+                                <th className={`text-right py-1.5 px-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>{t('account.estimatedValue')}</th>
+                                <th className={`text-right py-1.5 px-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>{t('account.ratio')}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -546,7 +548,7 @@ export default function AccountManager() {
                         </div>
                       </div>
                     ) : (
-                      <div className={`py-4 text-center ${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>暂无资产数据</div>
+                      <div className={`py-4 text-center ${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('account.noAssetData')}</div>
                     )}
                   </div>
                 )}
@@ -564,7 +566,7 @@ export default function AccountManager() {
               {apiConfig && (
                 <span className={isMobile ? 'text-lg' : 'text-xl'}>{getExchangeConfig(apiConfig.exchange || 'binance').logo}</span>
               )}
-              资产概览
+              {t('account.assetOverview')}
             </h3>
             <button
               className={`btn-secondary flex items-center gap-1.5 ${isMobile ? 'text-xs' : 'text-sm'}`}
@@ -572,23 +574,23 @@ export default function AccountManager() {
               disabled={loading}
             >
               <RefreshCw className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} ${loading ? 'animate-spin' : ''}`} />
-              刷新
+              {t('common.refresh')}
             </button>
           </div>
 
           <div className={`grid ${isMobile ? 'grid-cols-3 gap-2' : 'grid-cols-1 md:grid-cols-3 gap-4'}`}>
             <div className={`${isMobile ? 'p-2.5' : 'p-4'} rounded-xl`} style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(15,23,42,0.5) 100%)', border: '1px solid rgba(59,130,246,0.15)' }}>
-              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 font-medium`}>总资产</p>
+              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 font-medium`}>{t('account.totalAssets')}</p>
               <p className={`${isMobile ? 'text-sm' : 'text-2xl'} font-bold text-blue-400 mt-0.5 tracking-tight`}>
                 ${accountInfo.totalUsdtValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
             <div className={`${isMobile ? 'p-2.5' : 'p-4'} rounded-xl`} style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.08) 0%, rgba(15,23,42,0.5) 100%)', border: '1px solid rgba(139,92,246,0.15)' }}>
-              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 font-medium`}>币种数</p>
+              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 font-medium`}>{t('account.coinCount')}</p>
               <p className={`${isMobile ? 'text-sm' : 'text-2xl'} font-bold mt-0.5 tracking-tight`}>{accountInfo.balances.length}</p>
             </div>
             <div className={`${isMobile ? 'p-2.5' : 'p-4'} rounded-xl`} style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(15,23,42,0.5) 100%)', border: '1px solid rgba(16,185,129,0.15)' }}>
-              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 font-medium`}>最后更新</p>
+              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 font-medium`}>{t('account.lastUpdate')}</p>
               <p className={`${isMobile ? 'text-xs' : 'text-lg'} font-bold mt-0.5 tracking-tight`}>
                 {new Date(accountInfo.updateTime).toLocaleTimeString('zh-CN')}
               </p>
@@ -598,13 +600,13 @@ export default function AccountManager() {
           {/* Balances Table */}
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>最小显示价值</span>
+              <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('account.minDisplayValue')}</span>
               <select
                 className="select-field text-xs py-0.5 px-2 w-auto"
                 value={minDisplayValue}
                 onChange={(e) => handleMinValueChange(Number(e.target.value))}
               >
-                <option value={0}>全部显示</option>
+                <option value={0}>{t('account.showAll')}</option>
                 <option value={0.01}>≥ $0.01</option>
                 <option value={0.1}>≥ $0.1</option>
                 <option value={1}>≥ $1</option>
@@ -615,17 +617,17 @@ export default function AccountManager() {
               </select>
             </div>
             <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>
-              {accountInfo.balances.filter(b => b.usdtValue >= minDisplayValue).length}/{accountInfo.balances.length} 币种
+              {accountInfo.balances.filter(b => b.usdtValue >= minDisplayValue).length}/{accountInfo.balances.length} {t('account.coins')}
             </span>
           </div>
           <div className="overflow-x-auto">
             <table className={`w-full ${isMobile ? 'text-xs' : 'text-sm'}`}>
               <thead>
                 <tr className="text-slate-400 border-b border-slate-800">
-                  <th className={`text-left py-2 ${isMobile ? 'px-2' : 'px-3'}`}>币种</th>
-                  <th className={`text-right py-2 ${isMobile ? 'px-2' : 'px-3'}`}>可用</th>
-                  <th className={`text-right py-2 ${isMobile ? 'px-2' : 'px-3'}`}>冻结</th>
-                  <th className={`text-right py-2 ${isMobile ? 'px-2' : 'px-3'}`}>估值</th>
+                  <th className={`text-left py-2 ${isMobile ? 'px-2' : 'px-3'}`}>{t('account.asset')}</th>
+                  <th className={`text-right py-2 ${isMobile ? 'px-2' : 'px-3'}`}>{t('account.available')}</th>
+                  <th className={`text-right py-2 ${isMobile ? 'px-2' : 'px-3'}`}>{t('account.locked')}</th>
+                  <th className={`text-right py-2 ${isMobile ? 'px-2' : 'px-3'}`}>{t('account.estimatedValue')}</th>
                 </tr>
               </thead>
               <tbody>
