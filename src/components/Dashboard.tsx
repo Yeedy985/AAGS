@@ -2,9 +2,10 @@ import { TrendingUp, TrendingDown, Wallet, Activity, Target, Zap } from 'lucide-
 import { useStore } from '../store/useStore';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { useMemo, useState } from 'react';
-import type { EquitySnapshot } from '../types';
+import { XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid, ReferenceLine, ComposedChart, Line } from 'recharts';
+import { useMemo, useState, useRef, useEffect } from 'react';
+import { updateStrategyProfit } from '../services/strategyExecutor';
+import type { EquitySnapshot, TradeRecord } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 const STAT_STYLES: Record<string, { bg: string; shadow: string; text: string }> = {
@@ -120,6 +121,75 @@ export default function Dashboard() {
     }));
   }, [snapshots, selectedInterval]);
 
+  // 累计收益曲线：基于所有策略的 tradeRecords
+  const cumulativeProfitData = useMemo(() => {
+    if (!allTradeRecords.length) return [];
+    const pairedTrades = allTradeRecords.filter(t => t.profit !== 0);
+    if (!pairedTrades.length) return [];
+    const sorted = [...pairedTrades].sort((a, b) => a.timestamp - b.timestamp);
+    let cumulative = 0;
+    // 按天聚合
+    const dailyMap = new Map<string, number>();
+    for (const t of sorted) {
+      cumulative += t.profit;
+      const d = new Date(t.timestamp);
+      const key = `${d.getMonth() + 1}/${d.getDate()}`;
+      dailyMap.set(key, cumulative);
+    }
+    return Array.from(dailyMap.entries()).map(([day, cum]) => ({ day, cumulative: parseFloat(cum.toFixed(4)) }));
+  }, [allTradeRecords]);
+
+  // 第一个策略的成交价格曲线
+  const firstStrategy = strategies[0] || null;
+  const [tradeChartInterval, setTradeChartInterval] = useState<'1m' | '15m' | '1h' | '1d' | '1w'>('1h');
+
+  const firstStrategyTrades = useLiveQuery(
+    () => firstStrategy?.id
+      ? db.tradeRecords.where('strategyId').equals(firstStrategy.id).sortBy('timestamp')
+      : Promise.resolve([] as TradeRecord[]),
+    [firstStrategy?.id]
+  );
+
+  const tradeChartData = useMemo(() => {
+    if (!firstStrategyTrades?.length || !firstStrategy) return [];
+    const msMap = { '1m': 60_000, '15m': 15 * 60_000, '1h': 3600_000, '1d': 86400_000, '1w': 7 * 86400_000 };
+    const ms = msMap[tradeChartInterval];
+    const buckets = new Map<number, { buyPrice: number | null; sellPrice: number | null; buyCount: number; sellCount: number }>();
+    for (const t of firstStrategyTrades) {
+      const bucket = Math.floor(t.timestamp / ms) * ms;
+      const b = buckets.get(bucket) || { buyPrice: null, sellPrice: null, buyCount: 0, sellCount: 0 };
+      if (t.side === 'buy') { b.buyPrice = t.price; b.buyCount++; }
+      else { b.sellPrice = t.price; b.sellCount++; }
+      buckets.set(bucket, b);
+    }
+    const sorted = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]).slice(-200);
+    const fmtTime = (ts: number) => {
+      const d = new Date(ts);
+      if (ms <= 60_000) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+      if (ms <= 3600_000) return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+    };
+    return sorted.map(([bucket, b]) => ({
+      time: fmtTime(bucket),
+      buyPrice: b.buyPrice,
+      sellPrice: b.sellPrice,
+      buyCount: b.buyCount,
+      sellCount: b.sellCount,
+    }));
+  }, [firstStrategyTrades, tradeChartInterval, firstStrategy]);
+
+  // 进入仪表盘时触发利润重算
+  const profitRecalced = useRef(false);
+  useEffect(() => {
+    if (profitRecalced.current || strategies.length === 0) return;
+    profitRecalced.current = true;
+    (async () => {
+      for (const s of strategies) {
+        if (s.id) { try { await updateStrategyProfit(s.id); } catch {} }
+      }
+    })();
+  }, [strategies]);
+
   const totalAsset = accountInfo?.totalUsdtValue ?? 0;
 
   return (
@@ -209,6 +279,97 @@ export default function Dashboard() {
               <div className="text-center">
                 <p>暂无数据</p>
                 <p className={`${isMobile ? 'text-xs' : 'text-sm'} mt-1`}>账户资产数据将每次刷新时自动记录</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Cumulative Profit Curve */}
+        <div className="card">
+          <h3 className={`${isMobile ? 'text-sm mb-2' : 'text-base mb-4'} font-medium text-slate-400`}>累计收益曲线</h3>
+          {cumulativeProfitData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={isMobile ? 180 : 250}>
+              <AreaChart data={cumulativeProfitData}>
+                <defs>
+                  <linearGradient id="cumulGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={cumulativeProfitData[cumulativeProfitData.length - 1]?.cumulative >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={cumulativeProfitData[cumulativeProfitData.length - 1]?.cumulative >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.15)" />
+                <XAxis dataKey="day" tick={{ fill: '#64748b', fontSize: isMobile ? 9 : 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={40} />
+                <YAxis tick={{ fill: '#64748b', fontSize: isMobile ? 9 : 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${v}`} width={50} />
+                <ReferenceLine y={0} stroke="rgba(148,163,184,0.3)" strokeDasharray="4 4" />
+                <Tooltip
+                  contentStyle={{ backgroundColor: 'rgba(15,23,42,0.9)', border: '1px solid rgba(51,65,85,0.4)', borderRadius: '12px', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px -4px rgba(0,0,0,0.4)' }}
+                  labelStyle={{ color: '#94a3b8', fontSize: 12 }}
+                  formatter={(v: any) => [`$${Number(v).toFixed(4)}`, '累计收益']}
+                />
+                <Area type="monotone" dataKey="cumulative" stroke={cumulativeProfitData[cumulativeProfitData.length - 1]?.cumulative >= 0 ? '#10b981' : '#ef4444'} fill="url(#cumulGrad)" strokeWidth={2} dot={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className={`${isMobile ? 'h-[180px]' : 'h-[250px]'} flex items-center justify-center text-slate-600`}>
+              <div className="text-center">
+                <p>暂无数据</p>
+                <p className={`${isMobile ? 'text-xs' : 'text-sm'} mt-1`}>完成配对交易后将自动显示累计收益</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Charts Row 2: First Strategy Trade Chart + Strategy Overview */}
+      <div className={isMobile ? 'space-y-3' : 'grid grid-cols-1 lg:grid-cols-2 gap-4'}>
+        {/* First Strategy Trade Price Chart */}
+        <div className="card">
+          <div className={isMobile ? 'mb-3' : 'flex items-center justify-between mb-4'}>
+            <h3 className={`${isMobile ? 'text-sm mb-2' : 'text-base'} font-medium text-slate-400`}>
+              {firstStrategy ? `${firstStrategy.symbol.replace('USDT', '')}/USDT 成交价格` : '成交价格曲线'}
+            </h3>
+            <div className="flex items-center gap-1">
+              {firstStrategyTrades && <span className="text-xs text-slate-600 mr-1">{firstStrategyTrades.length}笔</span>}
+              {(['1m', '15m', '1h', '1d', '1w'] as const).map(val => (
+                <button key={val} onClick={() => setTradeChartInterval(val)}
+                  className={`px-2 py-0.5 text-xs rounded transition-colors ${tradeChartInterval === val ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40' : 'text-slate-500 hover:text-slate-300 border border-transparent'}`}>
+                  {{ '1m': '1分', '15m': '15分', '1h': '1时', '1d': '1天', '1w': '1周' }[val]}
+                </button>
+              ))}
+            </div>
+          </div>
+          {tradeChartData.length > 0 && firstStrategy ? (() => {
+            const cp = firstStrategy.centerPrice;
+            const yMin = parseFloat((cp * 0.7).toFixed(6));
+            const yMax = parseFloat((cp * 1.3).toFixed(6));
+            const priceFmt = cp < 1 ? 6 : cp < 100 ? 4 : 2;
+            return (
+            <ResponsiveContainer width="100%" height={isMobile ? 200 : 260}>
+              <ComposedChart data={tradeChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.15)" />
+                <XAxis dataKey="time" tick={{ fill: '#64748b', fontSize: isMobile ? 9 : 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={40} />
+                <YAxis tick={{ fill: '#64748b', fontSize: isMobile ? 9 : 10 }} axisLine={false} tickLine={false} domain={[yMin, yMax]} tickFormatter={(v: number) => v.toFixed(priceFmt)} width={cp < 1 ? 65 : 55} />
+                <ReferenceLine y={cp} stroke="#94a3b8" strokeDasharray="6 3" strokeWidth={1.5} label={{ value: `开仓 ${cp.toFixed(priceFmt)}`, position: 'right', fill: '#94a3b8', fontSize: 10 }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: 'rgba(15,23,42,0.9)', border: '1px solid rgba(51,65,85,0.4)', borderRadius: '12px', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px -4px rgba(0,0,0,0.4)' }}
+                  labelStyle={{ color: '#94a3b8', fontSize: 11, marginBottom: 4 }}
+                  formatter={(v: any, name: any, props: any) => {
+                    if (v === null || v === undefined) return ['-', ''];
+                    const entry = props.payload;
+                    const label = name === 'buyPrice' ? '买入价' : '卖出价';
+                    const count = name === 'buyPrice' ? entry.buyCount : entry.sellCount;
+                    return [`${Number(v).toFixed(priceFmt)} (${count}笔)`, label];
+                  }}
+                />
+                <Line type="monotone" dataKey="buyPrice" stroke="#10b981" strokeWidth={2} dot={{ r: 2, fill: '#10b981' }} connectNulls name="buyPrice" />
+                <Line type="monotone" dataKey="sellPrice" stroke="#ef4444" strokeWidth={2} dot={{ r: 2, fill: '#ef4444' }} connectNulls name="sellPrice" />
+              </ComposedChart>
+            </ResponsiveContainer>
+            );
+          })() : (
+            <div className={`${isMobile ? 'h-[200px]' : 'h-[260px]'} flex items-center justify-center text-slate-600`}>
+              <div className="text-center">
+                <p>暂无交易数据</p>
+                <p className={`${isMobile ? 'text-xs' : 'text-sm'} mt-1`}>策略执行交易后将实时显示</p>
               </div>
             </div>
           )}
@@ -352,14 +513,23 @@ export default function Dashboard() {
                         <p className="text-slate-500 mb-0.5">成交/配对</p>
                         {(() => {
                           const trades = allTradeRecords.filter(t => t.strategyId === s.id);
-                          const tradeGroups = new Map<string, { buys: number; sells: number }>();
+                          // FIFO 配对: 和 updateStrategyProfit 保持一致
+                          const pairGroups = new Map<string, typeof trades>();
                           for (const t of trades) {
                             const k = `${t.layer}_${t.gridIndex}`;
-                            const g = tradeGroups.get(k) || { buys: 0, sells: 0 };
-                            if (t.side === 'buy') g.buys++; else g.sells++;
-                            tradeGroups.set(k, g);
+                            const arr = pairGroups.get(k) || [];
+                            arr.push(t);
+                            pairGroups.set(k, arr);
                           }
-                          const pairs = Array.from(tradeGroups.values()).reduce((sum, g) => sum + Math.min(g.buys, g.sells), 0);
+                          let pairs = 0;
+                          for (const [, group] of pairGroups) {
+                            group.sort((a, b) => a.timestamp - b.timestamp);
+                            const buyStack: typeof trades = [];
+                            for (const t of group) {
+                              if (t.side === 'buy') buyStack.push(t);
+                              else if (t.side === 'sell' && buyStack.length > 0) { buyStack.shift(); pairs++; }
+                            }
+                          }
                           return <p className="font-semibold text-slate-200">{trades.length}笔 / {pairs}对</p>;
                         })()}
                       </div>

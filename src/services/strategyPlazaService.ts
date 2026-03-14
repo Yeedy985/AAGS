@@ -56,7 +56,7 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<{
   if (!cfg) throw new Error('未配置公共服务，请先在舆情监控页面配置 AlphaSentinel 服务');
 
   const url = `${cfg.serverUrl}${path}`;
-  console.log('[Plaza API]', options.method || 'GET', url);
+  console.error('[Plaza API] >>>', options.method || 'GET', url, 'token:', cfg.authToken.slice(0, 10) + '...');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${cfg.authToken}`,
@@ -65,10 +65,11 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<{
 
   const res = await fetch(url, { ...options, headers });
   const text = await res.text();
-  console.log('[Plaza API] Response', res.status, text.slice(0, 300));
+  console.error('[Plaza API] <<<', res.status, text.slice(0, 500));
   try {
     return JSON.parse(text);
-  } catch {
+  } catch (e) {
+    console.error('[Plaza API] JSON parse failed:', e, 'raw:', text);
     throw new Error(`服务器返回非 JSON 响应 (${res.status}): ${text.slice(0, 300)}`);
   }
 }
@@ -139,9 +140,11 @@ export async function shareStrategy(data: {
   chartPoints?: number[];
   isRunning?: boolean;
 }): Promise<{ shareCode: string; id: number }> {
+  const bodyStr = JSON.stringify(data);
+  console.log('[Plaza Share] body length:', bodyStr.length, 'preview:', bodyStr.slice(0, 200));
   const res = await apiRequest<{ shareCode: string; id: number }>('/api/strategy/share', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: bodyStr,
   });
   if (!res.success) throw new Error(res.error || '分享失败');
   return res.data!;

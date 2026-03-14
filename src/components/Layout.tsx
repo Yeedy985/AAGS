@@ -170,9 +170,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Zap className="w-4 h-4 text-white" />
           </div>
           {!collapsed && (
-            <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
-              AAGS
-            </span>
+            <div className="flex flex-col">
+              <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent leading-tight">
+                AAGS
+              </span>
+              <span className="text-[9px] text-slate-500 font-medium tracking-wide">机构级量化，触手可及</span>
+            </div>
           )}
         </div>
 

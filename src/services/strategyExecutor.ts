@@ -551,9 +551,24 @@ export async function repairMissingTradeRecords(strategyId: number, apiConfig: A
 
   let noActiveCount = 0;
   for (const [key, group] of gridGroups) {
-    // 该网格是否已有活跃挂单 (placed 或 pending)
-    const hasActive = group.some(o => o.status === 'placed' || o.status === 'pending');
-    if (hasActive) continue;
+    // 清理重复: 同一网格如果有多个 placed，只保留最新的，取消其余
+    const placedInGroup = group.filter(o => o.status === 'placed').sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    if (placedInGroup.length > 1) {
+      log(strategyId, `[Step3b去重] ${key}: ${placedInGroup.length}个placed，取消${placedInGroup.length - 1}个`);
+      for (let i = 1; i < placedInGroup.length; i++) {
+        const dup = placedInGroup[i];
+        try {
+          if (dup.binanceOrderId) {
+            await cancelOrder(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, dup.binanceOrderId);
+          }
+        } catch { /* 可能已取消 */ }
+        await db.gridOrders.update(dup.id!, { status: 'cancelled', updatedAt: Date.now() });
+        await sleep(100);
+      }
+    }
+
+    // 该网格是否已有活跃挂单
+    if (placedInGroup.length >= 1 || group.some(o => o.status === 'pending')) continue;
 
     noActiveCount++;
 
@@ -717,9 +732,11 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
     .filter(o => o.status === 'placed' && !!o.binanceOrderId)
     .toArray();
 
-  if (localOrders.length === 0) return;
-
   let filledCount = 0;
+
+  if (localOrders.length === 0) {
+    // 没有 placed 订单也要继续执行阶段C（去重+补挂）和利润重算
+  } else {
 
   for (const order of localOrders) {
     // 通过 queryOrder 直接查询币安上的订单真实状态
@@ -761,22 +778,30 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
       updatedAt: Date.now(),
     });
 
-    // 记录交易 (用实际成交价格)
-    const feeInfo3 = await fetchOrderFee(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, order.binanceOrderId!);
-    await db.tradeRecords.add({
-      strategyId,
-      layer: order.layer,
-      gridIndex: order.gridIndex,
-      side: order.side,
-      price: actualPrice,
-      quantity: filledQty,
-      quoteAmount: actualPrice * filledQty,
-      profit: 0,
-      fee: feeInfo3.fee,
-      feeAsset: feeInfo3.feeAsset,
-      binanceTradeId: order.binanceOrderId || '',
-      timestamp: Date.now(),
-    });
+    // 记录交易 (去重: 避免同一个 binanceOrderId 被记录多次)
+    const existingTrade = await db.tradeRecords
+      .where('strategyId').equals(strategyId)
+      .filter(t => t.binanceTradeId === order.binanceOrderId)
+      .first();
+    if (!existingTrade) {
+      const feeInfo3 = await fetchOrderFee(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, order.binanceOrderId!);
+      await db.tradeRecords.add({
+        strategyId,
+        layer: order.layer,
+        gridIndex: order.gridIndex,
+        side: order.side,
+        price: actualPrice,
+        quantity: filledQty,
+        quoteAmount: actualPrice * filledQty,
+        profit: 0,
+        fee: feeInfo3.fee,
+        feeAsset: feeInfo3.feeAsset,
+        binanceTradeId: order.binanceOrderId || '',
+        timestamp: Date.now(),
+      });
+    } else {
+      log(strategyId, `跳过重复记录: ${order.side} ${order.layer}#${order.gridIndex} binanceId=${order.binanceOrderId}`);
+    }
 
     filledCount++;
 
@@ -829,14 +854,12 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
     await sleep(100); // 避免 API 限频
   }
 
-  // 有成交时才重算利润
-  if (filledCount > 0) {
-    await updateStrategyProfit(strategyId);
-  }
+  } // end of localOrders.length > 0
 
-  // ===== 阶段C: 确保每个网格都有活跃挂单 =====
-  // 每个 layer+gridIndex 应该有且仅有1个 placed 挂单。
-  // 如果某网格只有 filled 没有 placed → 补挂反向单。
+  // 每次轮询都重算利润，确保配对数据和利润值始终最新
+  await updateStrategyProfit(strategyId);
+
+  // ===== 阶段C: 确保每个网格有且仅有1个活跃挂单 =====
   const allGridOrders = await db.gridOrders
     .where('strategyId').equals(strategyId)
     .toArray();
@@ -850,8 +873,24 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
   }
 
   for (const [gk, gOrders] of groups) {
-    // 已有活跃挂单? → 跳过
-    if (gOrders.some(o => o.status === 'placed' || o.status === 'pending')) continue;
+    // 清理重复: 同一网格如果有多个 placed，只保留最新的，取消其余
+    const placedOrders = gOrders.filter(o => o.status === 'placed').sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    if (placedOrders.length > 1) {
+      log(strategyId, `[去重] ${gk}: ${placedOrders.length}个placed，保留最新，取消${placedOrders.length - 1}个`);
+      for (let i = 1; i < placedOrders.length; i++) {
+        const dup = placedOrders[i];
+        try {
+          if (dup.binanceOrderId) {
+            await cancelOrder(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, dup.binanceOrderId);
+          }
+        } catch { /* 可能已取消 */ }
+        await db.gridOrders.update(dup.id!, { status: 'cancelled', updatedAt: Date.now() });
+        await sleep(100);
+      }
+    }
+
+    // 已有活跃挂单? → 跳过（注意: 去重后 placedOrders[0] 是保留的那个）
+    if (placedOrders.length >= 1 || gOrders.some(o => o.status === 'pending')) continue;
 
     // 找最近一次有 targetPrice 的成交
     const fills = gOrders
@@ -904,7 +943,7 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
 }
 
 // ==================== 更新策略利润 ====================
-export async function updateStrategyProfit(strategyId: number) {
+export async function updateStrategyProfit(strategyId: number, forceSnapshot = false) {
   const strategy = await db.strategies.get(strategyId);
   if (!strategy) return;
 
@@ -915,11 +954,25 @@ export async function updateStrategyProfit(strategyId: number) {
     .toArray();
 
   console.log(`[利润重算] 策略${strategyId}: tradeRecords=${trades.length}条, filledOrders=${filledOrders.length}条`);
-  for (const t of trades) {
-    console.log(`  [trade] ${t.side} ${t.layer}#${t.gridIndex} @${t.price} qty=${t.quantity} ts=${new Date(t.timestamp).toLocaleString('zh-CN')}`);
+
+  // 去重: 删除重复的 binanceTradeId 记录（保留最早的一条）
+  const seenTradeIds = new Map<string, number>(); // binanceTradeId → 保留的记录ID
+  const dupIds: number[] = [];
+  for (const t of trades.sort((a, b) => a.timestamp - b.timestamp)) {
+    if (t.binanceTradeId && seenTradeIds.has(t.binanceTradeId)) {
+      dupIds.push(t.id!);
+    } else if (t.binanceTradeId) {
+      seenTradeIds.set(t.binanceTradeId, t.id!);
+    }
   }
-  for (const o of filledOrders) {
-    console.log(`  [filled] ${o.side} ${o.layer}#${o.gridIndex} @${o.price} qty=${o.quantity} binanceId=${o.binanceOrderId}`);
+  if (dupIds.length > 0) {
+    console.warn(`[利润重算] 发现 ${dupIds.length} 条重复 tradeRecord，正在删除...`);
+    log(strategyId, `清理 ${dupIds.length} 条重复成交记录`);
+    await db.tradeRecords.bulkDelete(dupIds);
+    // 重新读取去重后的数据
+    const cleanTrades = await db.tradeRecords.where('strategyId').equals(strategyId).toArray();
+    trades.length = 0;
+    trades.push(...cleanTrades);
   }
 
   // 利润计算: 按 layer+gridIndex 分组，时间排序后依次配对 buy→sell
@@ -938,10 +991,11 @@ export async function updateStrategyProfit(strategyId: number) {
     groups.set(key, list);
   }
 
-  for (const [key, group] of groups) {
+  const profitUpdates: { id: number; profit: number }[] = [];
+
+  for (const [, group] of groups) {
     // 按时间排序
     group.sort((a, b) => a.timestamp - b.timestamp);
-    console.log(`  [配对组] key=${key}, 共${group.length}条: ${group.map(t => t.side).join(',')}`);
 
     // 依次配对: 遇到 buy 压栈，遇到 sell 弹出最近的 buy 配对
     const buyStack: typeof trades = [];
@@ -955,12 +1009,26 @@ export async function updateStrategyProfit(strategyId: number) {
         pairedCount++;
         if (profit > 0) winCount++;
         if (t.timestamp >= todayStart) todayProfit += profit;
-        console.log(`  [配对] buy@${matchBuy.price} -> sell@${t.price}, profit=${profit.toFixed(6)}`);
+        // 把利润写到卖单上（供 Reports 页面使用）
+        if (t.id && t.profit !== profit) {
+          profitUpdates.push({ id: t.id, profit });
+        }
       }
     }
   }
 
-  console.log(`[利润重算] 结果: totalProfit=${totalProfit}, pairedCount=${pairedCount}, winCount=${winCount}`);
+  // 批量回写利润到 tradeRecords
+  if (profitUpdates.length > 0) {
+    for (const u of profitUpdates) {
+      await db.tradeRecords.update(u.id, { profit: u.profit });
+    }
+  }
+
+  // 只在利润变化时打日志
+  if (Math.abs(totalProfit - strategy.totalProfit) > 0.000001 || pairedCount !== strategy.totalTrades) {
+    console.log(`[利润重算] 策略${strategyId}: ${strategy.totalProfit} → ${totalProfit} (${pairedCount}对)`);
+    log(strategyId, `利润更新: ${strategy.totalProfit.toFixed(5)} → ${totalProfit.toFixed(5)} (${pairedCount}对配对)`);
+  }
 
   const updated: Partial<Strategy> = {
     totalProfit,
@@ -980,47 +1048,33 @@ export async function updateStrategyProfit(strategyId: number) {
       .where('strategyId').equals(strategyId)
       .reverse().sortBy('timestamp')
       .then(arr => arr[0]);
-    if (!latestSnap || Date.now() - latestSnap.timestamp >= SNAPSHOT_INTERVAL) {
-      // 计算持仓币值和浮动盈亏
-      const allFilled = await db.gridOrders
-        .where('strategyId').equals(strategyId)
-        .filter(o => o.status === 'filled')
-        .toArray();
-      const buys = allFilled.filter(o => o.side === 'buy');
-      const sells = allFilled.filter(o => o.side === 'sell');
-      const matchedKeys = new Set<string>();
-      for (const sell of sells) {
-        const match = buys.find(b =>
-          b.layer === sell.layer && b.gridIndex === sell.gridIndex &&
-          b.createdAt < sell.createdAt && !matchedKeys.has(`${b.layer}-${b.gridIndex}-${b.createdAt}`)
-        );
-        if (match) matchedKeys.add(`${match.layer}-${match.gridIndex}-${match.createdAt}`);
-      }
-      let holdQty = 0, costBasis = 0;
-      for (const b of buys) {
-        if (!matchedKeys.has(`${b.layer}-${b.gridIndex}-${b.createdAt}`)) {
-          holdQty += b.filledQuantity || b.quantity;
-          costBasis += b.price * (b.filledQuantity || b.quantity);
-        }
-      }
+    if (forceSnapshot || !latestSnap || Date.now() - latestSnap.timestamp >= SNAPSHOT_INTERVAL) {
       const strat = await db.strategies.get(strategyId);
-      const coinValue = holdQty; // 持有币数量
-      let unrealizedPnl = 0;
-      let latestPrice = 0;
-      if (holdQty > 0 && strat) {
-        try { latestPrice = await getPrice(strat.symbol); } catch { /* ignore */ }
-        unrealizedPnl = latestPrice > 0 ? (holdQty * latestPrice - costBasis) : 0;
-      }
-      const usdtValue = strat ? strat.totalFund - costBasis + totalProfit : 0;
+      if (strat) {
+        // 币持仓 = 所有当前挂着的卖单的币总数（挂卖单 = 持有的币等待卖出）
+        const placedSells = await db.gridOrders
+          .where('strategyId').equals(strategyId)
+          .filter(o => o.status === 'placed' && o.side === 'sell')
+          .toArray();
+        const holdQty = placedSells.reduce((sum, o) => sum + (o.quantity || 0), 0);
 
-      await db.equitySnapshots.add({
-        strategyId,
-        totalValue: strat ? strat.totalFund + totalProfit + unrealizedPnl : totalProfit,
-        coinValue,
-        usdtValue,
-        unrealizedPnl,
-        timestamp: Date.now(),
-      });
+        let latestPrice = 0;
+        try { latestPrice = await getPrice(strat.symbol); } catch { /* ignore */ }
+
+        const coinValue = holdQty * latestPrice; // 持有币的 USDT 市值
+        const usdtValue = Math.max(0, strat.totalFund + totalProfit - coinValue); // 剩余 USDT
+        const totalValue = coinValue + usdtValue;
+        const unrealizedPnl = coinValue > 0 ? (coinValue - placedSells.reduce((sum, o) => sum + o.price * (o.quantity || 0), 0)) : 0;
+
+        await db.equitySnapshots.add({
+          strategyId,
+          totalValue,
+          coinValue,
+          usdtValue,
+          unrealizedPnl,
+          timestamp: Date.now(),
+        });
+      }
     }
   } catch (e) {
     console.warn('[净值快照] 记录失败:', e);

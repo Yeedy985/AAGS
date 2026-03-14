@@ -574,25 +574,14 @@ export default function StrategyManager() {
                         const trades = allTradeRecords.filter(t => t.strategyId === s.id).sort((a, b) => b.timestamp - a.timestamp);
                         const filledGrids = orders.filter(o => o.status === 'filled');
 
-                        // 计算配对利润：按 layer+gridIndex 分组，买卖时间排序后依次配对
-                        const profitMap = new Map<string, number>(); // binanceTradeId → profit (只标在卖单上)
-                        const pairGroups = new Map<string, typeof trades>();
-                        for (const t of trades) {
-                          const k = `${t.layer}_${t.gridIndex}`;
-                          const arr = pairGroups.get(k) || [];
-                          arr.push(t);
-                          pairGroups.set(k, arr);
-                        }
+                        // 直接从 tradeRecord.profit 读取（已由 updateStrategyProfit 回写到卖单上）
+                        const profitMap = new Map<string, number>();
                         let pairsCount = 0;
                         let totalProfit = 0;
-                        for (const [, tList] of pairGroups) {
-                          const buys = tList.filter(t => t.side === 'buy').sort((a, b) => a.timestamp - b.timestamp);
-                          const sells = tList.filter(t => t.side === 'sell').sort((a, b) => a.timestamp - b.timestamp);
-                          const len = Math.min(buys.length, sells.length);
-                          for (let j = 0; j < len; j++) {
-                            const p = sells[j].price * sells[j].quantity - buys[j].price * buys[j].quantity;
-                            profitMap.set(sells[j].binanceTradeId, p);
-                            totalProfit += p;
+                        for (const t of trades) {
+                          if (t.profit !== 0) {
+                            profitMap.set(t.binanceTradeId, t.profit);
+                            totalProfit += t.profit;
                             pairsCount++;
                           }
                         }

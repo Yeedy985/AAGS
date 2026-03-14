@@ -1,17 +1,18 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import type { TradeRecord, EquitySnapshot } from '../types';
+import { updateStrategyProfit } from '../services/strategyExecutor';
 import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, Legend,
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   CartesianGrid, ReferenceLine,
 } from 'recharts';
 import {
-  TrendingUp, TrendingDown, Target, Calendar, DollarSign,
+  TrendingUp, Target, Calendar, DollarSign,
   BarChart3, Activity, Shield, ArrowUpRight, ArrowDownRight,
-  Clock, Layers, ChevronDown, FileText,
+  FileText,
 } from 'lucide-react';
 
 const LAYER_COLORS: Record<string, string> = {
@@ -71,13 +72,26 @@ export default function Reports() {
   const { strategies } = useStore();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'all'>('week');
-  const [tradeListExpanded, setTradeListExpanded] = useState(false);
 
   useEffect(() => {
     if (selectedId === null && strategies.length > 0) {
       setSelectedId(strategies[0].id!);
     }
   }, [strategies, selectedId]);
+
+  // 进入报表页时：重算利润 + 写入最新快照
+  const profitRecalced = useRef(false);
+  useEffect(() => {
+    if (profitRecalced.current || strategies.length === 0) return;
+    profitRecalced.current = true;
+    (async () => {
+      for (const s of strategies) {
+        if (s.id) {
+          try { await updateStrategyProfit(s.id, true); } catch {}
+        }
+      }
+    })();
+  }, [strategies]);
 
   const selected = strategies.find((s) => s.id === selectedId);
 
@@ -111,9 +125,9 @@ export default function Reports() {
 
   const equityData = useMemo(() => {
     if (!snapshots?.length) return [];
-    const ms = period === 'day' ? 60 * 1000
-      : period === 'week' ? 15 * 60 * 1000
-      : period === 'month' ? 60 * 60 * 1000
+    const ms = period === 'day' ? 5 * 60 * 1000
+      : period === 'week' ? 60 * 60 * 1000
+      : period === 'month' ? 4 * 60 * 60 * 1000
       : 24 * 60 * 60 * 1000;
     const buckets = new Map<number, EquitySnapshot>();
     for (const s of snapshots) {
@@ -184,27 +198,31 @@ export default function Reports() {
   const summaryStats = useMemo(() => {
     if (!selected) return null;
     const periodTrades = trades || [];
-    const totalTrades = periodTrades.length || selected.totalTrades;
-    const winCount = periodTrades.length > 0
-      ? periodTrades.filter(t => t.profit > 0).length
+    const totalTrades = periodTrades.length;
+
+    // 只统计已配对的交易（profit !== 0 的卖单）
+    const pairedTrades = periodTrades.filter(t => t.profit !== 0);
+    const pairedCount = pairedTrades.length || selected.totalTrades;
+    const winCount = pairedTrades.length > 0
+      ? pairedTrades.filter(t => t.profit > 0).length
       : selected.winTrades;
-    const loseCount = periodTrades.length > 0
-      ? periodTrades.filter(t => t.profit < 0).length
+    const loseCount = pairedTrades.length > 0
+      ? pairedTrades.filter(t => t.profit < 0).length
       : (selected.totalTrades - selected.winTrades);
-    const winRate = totalTrades > 0 ? (winCount / totalTrades * 100).toFixed(1) : '0.0';
-    const totalProfit = periodTrades.length > 0
-      ? periodTrades.reduce((s, t) => s + t.profit, 0)
+    const winRate = pairedCount > 0 ? (winCount / pairedCount * 100).toFixed(1) : '0.0';
+    const totalProfit = pairedTrades.length > 0
+      ? pairedTrades.reduce((s, t) => s + t.profit, 0)
       : selected.totalProfit;
-    const avgProfit = totalTrades > 0 ? totalProfit / totalTrades : 0;
+    const avgProfit = pairedCount > 0 ? totalProfit / pairedCount : 0;
     const totalFees = periodTrades.length > 0
       ? periodTrades.reduce((s, t) => s + t.fee, 0)
       : 0;
 
     const avgWin = winCount > 0
-      ? periodTrades.filter(t => t.profit > 0).reduce((s, t) => s + t.profit, 0) / winCount
+      ? pairedTrades.filter(t => t.profit > 0).reduce((s, t) => s + t.profit, 0) / winCount
       : 0;
     const avgLoss = loseCount > 0
-      ? Math.abs(periodTrades.filter(t => t.profit < 0).reduce((s, t) => s + t.profit, 0)) / loseCount
+      ? Math.abs(pairedTrades.filter(t => t.profit < 0).reduce((s, t) => s + t.profit, 0)) / loseCount
       : 0;
     const profitFactor = avgLoss > 0 ? avgWin / avgLoss : avgWin > 0 ? Infinity : 0;
 
@@ -232,11 +250,6 @@ export default function Reports() {
       maxDrawdown: selected.maxDrawdown,
     };
   }, [selected, trades, period]);
-
-  const recentTrades = useMemo(() => {
-    if (!trades?.length) return [];
-    return [...trades].sort((a, b) => b.timestamp - a.timestamp).slice(0, tradeListExpanded ? 50 : 10);
-  }, [trades, tradeListExpanded]);
 
   const periodLabel = period === 'day' ? '今日' : period === 'week' ? '近7天' : period === 'month' ? '近30天' : '全部';
 
@@ -299,12 +312,12 @@ export default function Reports() {
 
           {/* Summary Stats Cards */}
           {summaryStats && (
-            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2.5">
+            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2.5">
               <ReportStatCard
                 title={`${periodLabel}收益`}
                 value={`${summaryStats.totalProfit >= 0 ? '+' : ''}$${summaryStats.totalProfit.toFixed(2)}`}
                 icon={DollarSign}
-                color={summaryStats.totalProfit >= 0 ? 'green' : 'red'}
+                color="green"
                 trend={summaryStats.totalProfit > 0 ? 'up' : summaryStats.totalProfit < 0 ? 'down' : 'neutral'}
               />
               <ReportStatCard
@@ -312,7 +325,7 @@ export default function Reports() {
                 value={`${summaryStats.winRate}%`}
                 sub={`${summaryStats.winCount}胜 ${summaryStats.loseCount}负`}
                 icon={Target}
-                color={parseFloat(summaryStats.winRate) >= 50 ? 'green' : 'yellow'}
+                color="yellow"
               />
               <ReportStatCard
                 title="总交易"
@@ -325,34 +338,27 @@ export default function Reports() {
                 title="均笔收益"
                 value={`$${summaryStats.avgProfit.toFixed(4)}`}
                 icon={Activity}
-                color={summaryStats.avgProfit >= 0 ? 'cyan' : 'red'}
+                color="cyan"
                 trend={summaryStats.avgProfit > 0 ? 'up' : summaryStats.avgProfit < 0 ? 'down' : 'neutral'}
               />
               <ReportStatCard
                 title="日均收益"
                 value={`$${summaryStats.dailyReturn.toFixed(2)}`}
                 icon={Calendar}
-                color={summaryStats.dailyReturn >= 0 ? 'green' : 'red'}
+                color="orange"
               />
               <ReportStatCard
                 title="年化收益"
                 value={`${summaryStats.annualReturn.toFixed(1)}%`}
                 sub={`运行${summaryStats.daysRunning}天`}
                 icon={TrendingUp}
-                color={summaryStats.annualReturn >= 0 ? 'purple' : 'red'}
+                color="purple"
               />
               <ReportStatCard
                 title="最大回撤"
                 value={`${summaryStats.maxDrawdown.toFixed(2)}%`}
                 icon={Shield}
-                color={summaryStats.maxDrawdown > 5 ? 'red' : summaryStats.maxDrawdown > 2 ? 'yellow' : 'green'}
-              />
-              <ReportStatCard
-                title="盈亏比"
-                value={summaryStats.profitFactor === Infinity ? '∞' : summaryStats.profitFactor.toFixed(2)}
-                sub={summaryStats.totalFees > 0 ? `手续费 $${summaryStats.totalFees.toFixed(2)}` : undefined}
-                icon={Layers}
-                color={summaryStats.profitFactor >= 1.5 ? 'green' : summaryStats.profitFactor >= 1 ? 'yellow' : 'red'}
+                color="red"
               />
             </div>
           )}
@@ -399,7 +405,7 @@ export default function Reports() {
             <div className="card">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-emerald-400" />
+                  <BarChart3 className="w-4 h-4 text-orange-400" />
                   每日盈亏
                 </h3>
                 {dailyPnL.length > 0 && (() => {
@@ -429,7 +435,7 @@ export default function Reports() {
                     />
                     <Bar dataKey="pnl" name="盈亏" radius={[3, 3, 0, 0]}>
                       {dailyPnL.map((entry, i) => (
-                        <Cell key={i} fill={entry.pnl >= 0 ? '#10b981' : '#ef4444'} fillOpacity={0.85} />
+                        <Cell key={i} fill={entry.pnl >= 0 ? '#f97316' : '#3b82f6'} fillOpacity={0.85} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -460,8 +466,8 @@ export default function Reports() {
                   <AreaChart data={cumulativePnL}>
                     <defs>
                       <linearGradient id="cumulGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={cumulativePnL[cumulativePnL.length - 1]?.cumulative >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0.2} />
-                        <stop offset="95%" stopColor={cumulativePnL[cumulativePnL.length - 1]?.cumulative >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0} />
+                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.15)" />
@@ -476,7 +482,7 @@ export default function Reports() {
                         name === 'cumulative' ? '累计收益' : '当日盈亏',
                       ]}
                     />
-                    <Area type="monotone" dataKey="cumulative" stroke={cumulativePnL[cumulativePnL.length - 1]?.cumulative >= 0 ? '#10b981' : '#ef4444'} fill="url(#cumulGrad)" strokeWidth={2} dot={false} name="cumulative" />
+                    <Area type="monotone" dataKey="cumulative" stroke="#8b5cf6" fill="url(#cumulGrad)" strokeWidth={2} dot={false} name="cumulative" />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
@@ -484,48 +490,6 @@ export default function Reports() {
               )}
             </div>
 
-            {/* Holdings Breakdown */}
-            <div className="card">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-orange-400" />
-                  持仓比例变化
-                </h3>
-              </div>
-              {equityData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={260}>
-                  <AreaChart data={equityData}>
-                    <defs>
-                      <linearGradient id="coinGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#f97316" stopOpacity={0.05} />
-                      </linearGradient>
-                      <linearGradient id="usdtGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.05} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.15)" />
-                    <XAxis dataKey="time" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={40} />
-                    <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${Math.round(v).toLocaleString()}`} width={58} />
-                    <Tooltip
-                      contentStyle={TOOLTIP_STYLE}
-                      labelStyle={{ color: '#94a3b8', fontSize: 11, marginBottom: 4 }}
-                      formatter={(v: any, name: any) => [`$${Number(v).toFixed(2)}`, name === 'coin' ? '币价值' : 'USDT']}
-                    />
-                    <Area type="monotone" dataKey="coin" stackId="1" stroke="#f97316" fill="url(#coinGrad)" strokeWidth={1.5} name="coin" />
-                    <Area type="monotone" dataKey="usdt" stackId="1" stroke="#3b82f6" fill="url(#usdtGrad)" strokeWidth={1.5} name="usdt" />
-                    <Legend formatter={(v: string) => v === 'coin' ? '币价值' : 'USDT'} iconType="square" wrapperStyle={{ fontSize: 11, color: '#94a3b8' }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <EmptyChart text="暂无持仓数据" sub="策略运行后将记录持仓变化" />
-              )}
-            </div>
-          </div>
-
-          {/* Charts Row 3: Layer Pie + Trade History */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Layer Profit Pie */}
             <div className="card">
               <div className="flex items-center justify-between mb-4">
@@ -583,75 +547,6 @@ export default function Reports() {
               )}
             </div>
 
-            {/* Recent Trades Table */}
-            <div className="card">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-yellow-400" />
-                  最近交易记录
-                </h3>
-                {(trades?.length ?? 0) > 0 && (
-                  <span className="text-xs text-slate-600">{trades?.length} 笔</span>
-                )}
-              </div>
-              {recentTrades.length > 0 ? (
-                <div className="overflow-hidden">
-                  <div className="max-h-[260px] overflow-y-auto scrollbar-thin">
-                    <table className="w-full text-xs">
-                      <thead className="sticky top-0">
-                        <tr className="text-slate-500" style={{ background: 'rgba(15,23,42,0.9)' }}>
-                          <th className="text-left py-1.5 px-2 font-medium">时间</th>
-                          <th className="text-left py-1.5 px-2 font-medium">方向</th>
-                          <th className="text-right py-1.5 px-2 font-medium">价格</th>
-                          <th className="text-right py-1.5 px-2 font-medium">数量</th>
-                          <th className="text-right py-1.5 px-2 font-medium">盈亏</th>
-                          <th className="text-left py-1.5 px-2 font-medium">层级</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {recentTrades.map((t, i) => (
-                          <tr key={t.id ?? i} className="border-t border-slate-800/30 hover:bg-slate-800/20 transition-colors">
-                            <td className="py-1.5 px-2 text-slate-500 tabular-nums">
-                              {new Date(t.timestamp).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                            </td>
-                            <td className="py-1.5 px-2">
-                              <span className={`inline-flex items-center gap-0.5 font-medium ${t.side === 'buy' ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {t.side === 'buy' ? <ArrowDownRight className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
-                                {t.side === 'buy' ? '买入' : '卖出'}
-                              </span>
-                            </td>
-                            <td className="py-1.5 px-2 text-right text-slate-300 tabular-nums font-medium">{t.price.toFixed(t.price < 1 ? 6 : 2)}</td>
-                            <td className="py-1.5 px-2 text-right text-slate-400 tabular-nums">{t.quantity.toFixed(t.quantity < 1 ? 6 : 4)}</td>
-                            <td className={`py-1.5 px-2 text-right font-medium tabular-nums ${t.profit > 0 ? 'text-emerald-400' : t.profit < 0 ? 'text-red-400' : 'text-slate-500'}`}>
-                              {t.profit > 0 ? '+' : ''}{t.profit.toFixed(4)}
-                            </td>
-                            <td className="py-1.5 px-2">
-                              <span className="px-1.5 py-0.5 rounded text-xs" style={{
-                                backgroundColor: t.layer === 'trend' ? 'rgba(59,130,246,0.1)' : t.layer === 'swing' ? 'rgba(16,185,129,0.1)' : 'rgba(249,115,22,0.1)',
-                                color: t.layer === 'trend' ? '#60a5fa' : t.layer === 'swing' ? '#34d399' : '#fb923c',
-                              }}>
-                                {LAYER_NAMES[t.layer]?.slice(0, 2) ?? t.layer}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {(trades?.length ?? 0) > 10 && (
-                    <button
-                      className="w-full mt-2 py-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center gap-1"
-                      onClick={() => setTradeListExpanded(!tradeListExpanded)}
-                    >
-                      <ChevronDown className={`w-3 h-3 transition-transform ${tradeListExpanded ? 'rotate-180' : ''}`} />
-                      {tradeListExpanded ? '收起' : `展开更多 (共${trades?.length}笔)`}
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <EmptyChart text="暂无交易记录" sub="策略执行交易后将实时显示" />
-              )}
-            </div>
           </div>
         </>
       )}
