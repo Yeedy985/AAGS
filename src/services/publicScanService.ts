@@ -267,7 +267,9 @@ export async function saveBriefing(briefing: ScanBriefing, overrideTimestamp?: n
 
   const alerts: EventAlert[] = briefing.alerts.map(a => ({
     title: a.title,
+    titleEn: a.titleEn || '',
     description: a.description,
+    descriptionEn: a.descriptionEn || '',
     level: a.level as AlertLevel,
     group: (a.group || 'G9') as SignalGroup,
     relatedCoins: a.relatedCoins,
