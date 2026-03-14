@@ -242,7 +242,9 @@ export async function saveBriefing(briefing: ScanBriefing, overrideTimestamp?: n
       confidence: t.confidence,
       halfLife: def?.halfLife || 720,
       title: t.title,
+      titleEn: t.titleEn || '',
       summary: t.summary,
+      summaryEn: t.summaryEn || '',
       source: `[公共服务] ${t.source}`,
       triggeredAt: now,
     };
