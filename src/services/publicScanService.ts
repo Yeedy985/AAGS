@@ -294,7 +294,9 @@ export async function notifyBriefing(briefing: ScanBriefing): Promise<void> {
   for (const alert of briefing.alerts) {
     const eventAlert: EventAlert = {
       title: alert.title,
+      titleEn: alert.titleEn || '',
       description: alert.description,
+      descriptionEn: alert.descriptionEn || '',
       level: alert.level as AlertLevel,
       group: (alert.group || 'G9') as SignalGroup,
       relatedCoins: alert.relatedCoins,

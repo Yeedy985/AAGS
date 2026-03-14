@@ -186,14 +186,18 @@ function formatAlertMessage(alert: EventAlert): string {
   const sourceLabel = isZh ? '来源' : 'Source';
   const timeLabel = isZh ? '时间' : 'Time';
 
+  const title = isZh ? alert.title : (alert.titleEn || alert.title);
+  const desc = isZh ? alert.description : (alert.descriptionEn || alert.description);
+  const source = isZh ? alert.source : alert.source.replace('[公共服务]', '[Public Service]');
+
   return `${emoji} <b>[Sentinel-X ${label}]</b>
 
-<b>${alert.title}</b>
+<b>${title}</b>
 
-${alert.description}
+${desc}
 
 ${groupLabel}: ${alert.group}${scoreInfo}${coins}
-${sourceLabel}: ${alert.source}
+${sourceLabel}: ${source}
 ${timeLabel}: ${time}`;
 }
 
@@ -362,11 +366,21 @@ export async function notifyScanFailure(reason: string, detail: string): Promise
 
   const isZh = getLang() === 'zh';
   const now = new Date().toLocaleString(getLocale(), { timeZone: 'Asia/Shanghai' });
+  // 翻译 reason/detail key
+  const reasonMap: Record<string, { zh: string; en: string }> = {
+    token_insufficient: { zh: 'Token 余额不足', en: 'Insufficient Token Balance' },
+    rate_limited: { zh: '请求频率超限', en: 'Rate Limited' },
+    scan_error: { zh: '扫描异常', en: 'Scan Error' },
+    token_insufficient_detail: { zh: 'Token 不足，请前往 Sentinel-X 主页充值', en: 'Insufficient tokens. Please top up at Sentinel-X homepage' },
+    rate_limited_detail: { zh: '请求频率受限，请降低扫描频率或联系管理员', en: 'Rate limited. Reduce scan frequency or contact admin' },
+  };
+  const reasonText = reasonMap[reason]?.[isZh ? 'zh' : 'en'] || reason;
+  const detailText = reasonMap[detail]?.[isZh ? 'zh' : 'en'] || detail;
   const message = [
     `🚨 <b>[${isZh ? 'Sentinel-X 扫描失败' : 'Sentinel-X Scan Failed'}]</b>`,
     ``,
-    `⚠️ <b>${isZh ? '原因' : 'Reason'}:</b> ${reason}`,
-    detail ? `📋 <b>${isZh ? '详情' : 'Detail'}:</b> ${detail}` : '',
+    `⚠️ <b>${isZh ? '原因' : 'Reason'}:</b> ${reasonText}`,
+    detailText ? `📋 <b>${isZh ? '详情' : 'Detail'}:</b> ${detailText}` : '',
     `🕐 <b>${isZh ? '时间' : 'Time'}:</b> ${now}`,
   ].filter(Boolean).join('\n');
 
