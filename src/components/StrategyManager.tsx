@@ -469,14 +469,23 @@ export default function StrategyManager() {
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{t('strategy.matchPair')}</p>
                     {(() => {
                       const trades = allTradeRecords.filter(t => t.strategyId === s.id);
-                      const tradeGroups = new Map<string, { buys: number; sells: number }>();
+                      // FIFO 配对: 和 updateStrategyProfit 保持一致
+                      const pairGroups = new Map<string, typeof trades>();
                       for (const t of trades) {
                         const k = `${t.layer}_${t.gridIndex}`;
-                        const g = tradeGroups.get(k) || { buys: 0, sells: 0 };
-                        if (t.side === 'buy') g.buys++; else g.sells++;
-                        tradeGroups.set(k, g);
+                        const arr = pairGroups.get(k) || [];
+                        arr.push(t);
+                        pairGroups.set(k, arr);
                       }
-                      const pairs = Array.from(tradeGroups.values()).reduce((sum, g) => sum + Math.min(g.buys, g.sells), 0);
+                      let pairs = 0;
+                      for (const [, group] of pairGroups) {
+                        group.sort((a, b) => a.timestamp - b.timestamp);
+                        const buyStack: typeof trades = [];
+                        for (const t of group) {
+                          if (t.side === 'buy') buyStack.push(t);
+                          else if (t.side === 'sell' && buyStack.length > 0) { buyStack.shift(); pairs++; }
+                        }
+                      }
                       return <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold`}>{trades.length}{t('strategy.trades')} / {pairs}{t('strategy.pairs')}</p>;
                     })()}
                   </div>
