@@ -36,6 +36,13 @@
       ],
       "icon": "public/icon.ico"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Yeedy985",
+        "repo": "AAGS"
+      }
+    ],
     "nsis": {
       "oneClick": false,
       "perMachine": false,
@@ -54,6 +61,7 @@
     "crypto-js": "^4.2.0",
     "dexie": "^4.3.0",
     "dexie-react-hooks": "^4.2.0",
+    "electron-updater": "^6.8.3",
     "i18next": "^25.8.18",
     "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^0.577.0",

@@ -1,10 +1,97 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
+const { autoUpdater } = require('electron-updater');
 
 const isDev = !app.isPackaged;
+let mainWindow = null;
 
+// ==================== Auto Updater ====================
+function setupAutoUpdater() {
+  if (isDev) return; // 开发模式不检查更新
+
+  autoUpdater.autoDownload = false; // 不自动下载，让用户确认
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  // 发送更新状态到渲染进程
+  function sendToRenderer(channel, data) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(channel, data);
+    }
+  }
+
+  autoUpdater.on('checking-for-update', () => {
+    sendToRenderer('update-status', { status: 'checking' });
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    sendToRenderer('update-status', {
+      status: 'available',
+      version: info.version,
+      releaseNotes: info.releaseNotes || '',
+      releaseDate: info.releaseDate || '',
+    });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    sendToRenderer('update-status', { status: 'up-to-date' });
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    sendToRenderer('update-status', {
+      status: 'downloading',
+      percent: Math.round(progress.percent),
+      transferred: progress.transferred,
+      total: progress.total,
+      bytesPerSecond: progress.bytesPerSecond,
+    });
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    sendToRenderer('update-status', { status: 'downloaded' });
+  });
+
+  autoUpdater.on('error', (err) => {
+    sendToRenderer('update-status', { status: 'error', message: err.message });
+  });
+
+  // 启动后延迟 5 秒自动检查更新
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 5000);
+}
+
+// ==================== IPC Handlers ====================
+ipcMain.handle('check-for-update', async () => {
+  if (isDev) return { status: 'dev' };
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { status: 'ok', version: result?.updateInfo?.version };
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
+});
+
+ipcMain.handle('download-update', async () => {
+  if (isDev) return { status: 'dev' };
+  try {
+    await autoUpdater.downloadUpdate();
+    return { status: 'ok' };
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
+});
+
+ipcMain.handle('install-update', () => {
+  autoUpdater.quitAndInstall(false, true);
+});
+
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
+// ==================== Window ====================
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1024,
@@ -21,20 +108,23 @@ function createWindow() {
   });
 
   // Open external links in default browser
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
   if (isDev) {
-    win.loadURL('http://localhost:5173');
-    win.webContents.openDevTools({ mode: 'detach' });
+    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    win.loadFile(path.join(__dirname, '../dist/index.html'));
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  setupAutoUpdater();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

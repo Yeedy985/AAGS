@@ -1010,5 +1010,22 @@
         "done": "✅ All set! Click <b>Test</b> to send a test message. Check your WhatsApp for the notification."
       }
     }
+  },
+  "updater": {
+    "title": "App Update",
+    "currentVersion": "Current v{{version}}",
+    "newVersion": "New version available",
+    "downloadNow": "Download Now",
+    "later": "Later",
+    "downloading": "Downloading...",
+    "ready": "Ready to install",
+    "installRestart": "Install & Restart",
+    "installHint": "The app will close and install the update automatically",
+    "error": "Update failed",
+    "retry": "Retry",
+    "checkUpdate": "Check for Updates",
+    "foundVersion": "New version v{{version}} found",
+    "alreadyLatest": "✅ Already up to date",
+    "checkFailed": "Failed to check for updates, please try again later"
   }
 }
