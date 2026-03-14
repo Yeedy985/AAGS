@@ -5,7 +5,7 @@ import {
   TrendingUp, TrendingDown, Eye, EyeOff, AlertTriangle,
   Settings2, RefreshCw, Shield, Zap, Activity,
   ArrowUpRight, ArrowDownRight, Gauge, Search, Brain,
-  Globe, Server, Wifi, Clock, Send, ExternalLink, X, Radio, CalendarClock, Hand, Pause, Timer,
+  Globe, Server, Wifi, Clock, Send, ExternalLink, X, Radio, Pause, Timer,
 } from 'lucide-react';
 import { db } from '../db';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -285,11 +285,6 @@ function LLMConfigPanel() {
 // ==================== 子组件: 公共服务配置面板 ====================
 const DEFAULT_SERVER_URL = 'https://alphinel.com';
 
-const REPORT_MODE_OPTIONS: { value: ReportMode; labelKey: string; descKey: string; icon: typeof Radio }[] = [
-  { value: 'realtime', labelKey: 'sentiment.reportMode.realtime', descKey: 'sentiment.reportMode.realtimeDesc', icon: Radio },
-  { value: 'scheduled', labelKey: 'sentiment.reportMode.scheduled', descKey: 'sentiment.reportMode.scheduledDesc', icon: CalendarClock },
-  { value: 'manual', labelKey: 'sentiment.reportMode.manual', descKey: 'sentiment.reportMode.manualDesc', icon: Hand },
-];
 
 const ALERT_LEVEL_OPTIONS: { value: 'critical' | 'warning' | 'info'; labelKey: string; emoji: string; descKey: string }[] = [
   { value: 'critical', labelKey: 'sentiment.alertLevel.critical', emoji: '🔴', descKey: 'sentiment.alertLevel.criticalDesc' },
