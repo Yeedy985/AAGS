@@ -431,11 +431,11 @@ async function backgroundScan() {
     // 精确分类错误类型
     const isTokenInsufficient = errMsg.includes('402') || errMsg.includes('余额不足') || errMsg.includes('insufficient');
     const isRateLimit = errMsg.includes('429') || errMsg.includes('最多请求');
-    const reason = isTokenInsufficient ? 'Token 余额不足' : isRateLimit ? '请求频率超限' : '扫描异常';
+    const reason = isTokenInsufficient ? 'token_insufficient' : isRateLimit ? 'rate_limited' : 'scan_error';
     const detail = isTokenInsufficient
-      ? 'Token 不足，调用公共服务扫描失败，请前往 Sentinel-X 主页充值 Token'
+      ? 'token_insufficient_detail'
       : isRateLimit
-      ? '公共服务请求频率受限，已触发后台每小时扫描次数上限，请联系管理员调高限制或降低自动扫描频率'
+      ? 'rate_limited_detail'
       : errMsg;
     // 保存失败记录到 DB
     await db.scanFailures.add({ timestamp: Date.now(), reason, errorDetail: detail, mode });
@@ -1901,14 +1901,14 @@ function SignalEventHistory() {
             <div className="space-y-2">
               {scanFailures!.map((f) => {
                 const time = new Date(f.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                const isToken = f.reason.includes('Token');
-                const isRateLimit = f.reason.includes('频率') || f.reason.includes('rate');
+                const isToken = f.reason.includes('Token') || f.reason === 'token_insufficient';
+                const isRateLimit = f.reason.includes('频率') || f.reason === 'rate_limited';
                 return (
                   <div key={f.id} className={`rounded-xl border p-3 ${isRateLimit ? 'border-amber-500/20 bg-amber-500/5' : 'border-red-500/20 bg-red-500/5'}`}>
                     <div className="flex items-center gap-2 flex-wrap">
                       <AlertTriangle className={`w-4 h-4 shrink-0 ${isRateLimit ? 'text-amber-400' : 'text-red-400'}`} />
                       <span className="text-sm text-slate-500 shrink-0">{time}</span>
-                      <span className={`text-sm font-medium ${isRateLimit ? 'text-amber-400' : 'text-red-400'}`}>{f.reason}</span>
+                      <span className={`text-sm font-medium ${isRateLimit ? 'text-amber-400' : 'text-red-400'}`}>{t(`sentiment.scanFailure.${f.reason}`, f.reason)}</span>
                       {f.mode === 'public-service' && <span className="text-xs px-1 py-0.5 rounded bg-cyan-600/10 text-cyan-500">{t('sentiment.scanHistory.publicService')}</span>}
                     </div>
                     <p className="text-sm mt-1.5 ml-6">

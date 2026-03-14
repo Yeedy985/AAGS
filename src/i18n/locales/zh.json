@@ -889,6 +889,14 @@
       "tokenInsufficient": "💡 Token 余额不足，请前往充值",
       "rateLimited": "⏱️ 请求频率受限，请联系管理员调高限制或降低扫描频率"
     },
+    "scanFailure": {
+      "token_insufficient": "Token 余额不足",
+      "rate_limited": "请求频率超限",
+      "scan_error": "扫描异常",
+      "Token 余额不足": "Token 余额不足",
+      "请求频率超限": "请求频率超限",
+      "扫描异常": "扫描异常"
+    },
     "errors": {
       "noAnalyzer": "请先配置并启用至少一个「分析 Analyzer」LLM 模型",
       "noSignals": "请先启用信号",

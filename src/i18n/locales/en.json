@@ -889,6 +889,14 @@
       "tokenInsufficient": "💡 Insufficient Token balance. Please top up at",
       "rateLimited": "⏱️ Rate limited. Contact admin to increase limits or reduce scan frequency"
     },
+    "scanFailure": {
+      "token_insufficient": "Insufficient Token Balance",
+      "rate_limited": "Rate Limited",
+      "scan_error": "Scan Error",
+      "Token 余额不足": "Insufficient Token Balance",
+      "请求频率超限": "Rate Limited",
+      "扫描异常": "Scan Error"
+    },
     "errors": {
       "noAnalyzer": "Please configure and enable at least one Analyzer LLM model first",
       "noSignals": "Please enable signals first",
