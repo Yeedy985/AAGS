@@ -277,12 +277,16 @@ function formatScanResultMessage(briefing: ScanBriefing, scores?: ScoringResult 
   const topSignals = briefing.triggeredSignals
     .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
     .slice(0, 5)
-    .map(s => `  ${s.impact > 0 ? '📈' : '📉'} ${escapeHtml(s.title)} (${s.impact > 0 ? '+' : ''}${s.impact})`)
+    .map(s => {
+      const title = isZh ? s.title : (s.titleEn || s.title);
+      return `  ${s.impact > 0 ? '📈' : '📉'} ${escapeHtml(title)} (${s.impact > 0 ? '+' : ''}${s.impact})`;
+    })
     .join('\n');
 
   const summaryLabel = isZh ? '市场综合分析' : 'Market Analysis';
-  const summary = briefing.marketSummary
-    ? `\n\n📋 <b>${summaryLabel}</b>\n${escapeHtml(briefing.marketSummary)}`
+  const mktSummary = isZh ? briefing.marketSummary : (briefing.marketSummaryEn || briefing.marketSummary);
+  const summary = mktSummary
+    ? `\n\n📋 <b>${summaryLabel}</b>\n${escapeHtml(mktSummary)}`
     : '';
 
   const title = isZh ? 'Sentinel-X 信号扫描报告' : 'Sentinel-X Signal Scan Report';

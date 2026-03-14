@@ -174,21 +174,26 @@ function parseBriefing(raw: any): ScanBriefing {
     timestamp: raw.timestamp || Date.now(),
     receivedAt: Date.now(),
     marketSummary: raw.marketSummary || '',
+    marketSummaryEn: raw.marketSummaryEn || '',
     triggeredSignals: (raw.triggeredSignals || []).map((s: any) => ({
       signalId: Number(s.signalId) || 0,
       impact: Number(s.impact) || 0,
       confidence: Math.max(0, Math.min(1, Number(s.confidence) || 0.5)),
       title: s.title || '无标题',
+      titleEn: s.titleEn || '',
       summary: s.summary || '',
-      source: s.source || '公共服务',
+      summaryEn: s.summaryEn || '',
+      source: s.source || 'Public Service',
     })),
     alerts: (raw.alerts || []).map((a: any) => ({
       title: a.title || '未知事件',
+      titleEn: a.titleEn || '',
       description: a.description || '',
+      descriptionEn: a.descriptionEn || '',
       level: (['critical', 'warning', 'info'].includes(a.level) ? a.level : 'info') as AlertLevel,
       group: a.group || 'G9',
       relatedCoins: Array.isArray(a.relatedCoins) ? a.relatedCoins : [],
-      source: a.source || '公共服务',
+      source: a.source || 'Public Service',
     })),
     pipelineInfo: {
       hasSearcher: raw.pipelineInfo?.hasSearcher ?? true,
@@ -315,14 +320,16 @@ export function formatBriefingMessage(briefing: ScanBriefing): string {
   msg += `⏰ ${time}\n\n`;
 
   if (briefing.marketSummary) {
-    msg += `📊 <b>${isZh ? '市场概述' : 'Market Summary'}</b>\n${briefing.marketSummary}\n\n`;
+    const mktText = isZh ? briefing.marketSummary : (briefing.marketSummaryEn || briefing.marketSummary);
+    msg += `📊 <b>${isZh ? '市场概述' : 'Market Summary'}</b>\n${mktText}\n\n`;
   }
 
   if (briefing.triggeredSignals.length > 0) {
     msg += `⚡ <b>${isZh ? '触发信号' : 'Triggered Signals'} (${briefing.triggeredSignals.length})</b>\n`;
     for (const sig of briefing.triggeredSignals.slice(0, 10)) {
       const arrow = sig.impact > 0 ? '📈' : '📉';
-      msg += `${arrow} #${sig.signalId} ${sig.title} (${sig.impact > 0 ? '+' : ''}${sig.impact})\n`;
+      const sigTitle = isZh ? sig.title : (sig.titleEn || sig.title);
+      msg += `${arrow} #${sig.signalId} ${sigTitle} (${sig.impact > 0 ? '+' : ''}${sig.impact})\n`;
     }
     if (briefing.triggeredSignals.length > 10) {
       msg += `...${isZh ? '还有' : 'and'} ${briefing.triggeredSignals.length - 10} ${isZh ? '条' : 'more'}\n`;
@@ -334,7 +341,8 @@ export function formatBriefingMessage(briefing: ScanBriefing): string {
     msg += `🚨 <b>${isZh ? '预警' : 'Alerts'} (${briefing.alerts.length})</b>\n`;
     for (const alert of briefing.alerts) {
       const emoji = alert.level === 'critical' ? '🔴' : alert.level === 'warning' ? '🟡' : '🔵';
-      msg += `${emoji} ${alert.title}\n`;
+      const alertTitle = isZh ? alert.title : (alert.titleEn || alert.title);
+      msg += `${emoji} ${alertTitle}\n`;
     }
   }
 

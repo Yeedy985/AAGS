@@ -448,7 +448,9 @@ export async function analyzeSignals(
       confidence: Math.max(0, Math.min(1, Number(t.confidence) || 0.5)),
       halfLife: def?.halfLife || 720,
       title: t.title || '无标题',
+      titleEn: t.titleEn || '',
       summary: t.summary || '',
+      summaryEn: t.summaryEn || '',
       source: t.source || 'LLM分析',
       triggeredAt: now,
     };
@@ -456,7 +458,9 @@ export async function analyzeSignals(
 
   const alerts: EventAlert[] = (parsed.alerts || []).map((a: any) => ({
     title: a.title || '未知事件',
+    titleEn: a.titleEn || '',
     description: a.description || '',
+    descriptionEn: a.descriptionEn || '',
     level: (['critical', 'warning', 'info'].includes(a.level) ? a.level : 'info') as AlertLevel,
     group: (a.group || 'G9') as SignalGroup,
     signalId: Number(a.signalId) || undefined,

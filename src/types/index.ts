@@ -282,7 +282,9 @@ export interface SignalEvent {
   confidence: number;
   halfLife: number;
   title: string;           // LLM 生成的事件标题
+  titleEn?: string;        // English title
   summary: string;         // LLM 生成的事件摘要
+  summaryEn?: string;      // English summary
   source: string;          // 信息来源
   triggeredAt: number;     // 触发时间戳
   decayedScore?: number;   // 当前衰减后得分 (运行时计算)
@@ -330,7 +332,9 @@ export type AlertLevel = 'critical' | 'warning' | 'info';
 export interface EventAlert {
   id?: number;
   title: string;
+  titleEn?: string;
   description: string;
+  descriptionEn?: string;
   level: AlertLevel;
   group: SignalGroup;
   signalId?: number;       // 关联信号编号
@@ -415,17 +419,22 @@ export interface ScanBriefing {
   timestamp: number;          // 服务端生成时间
   receivedAt: number;         // 客户端接收时间
   marketSummary: string;
+  marketSummaryEn?: string;
   triggeredSignals: {
     signalId: number;
     impact: number;
     confidence: number;
     title: string;
+    titleEn?: string;
     summary: string;
+    summaryEn?: string;
     source: string;
   }[];
   alerts: {
     title: string;
+    titleEn?: string;
     description: string;
+    descriptionEn?: string;
     level: AlertLevel;
     group: string;
     relatedCoins: string[];

@@ -415,7 +415,8 @@ function NotificationConfigPanel() {
 
 // ==================== 主组件: 消息中心 ====================
 export default function EventAlertPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isEn = i18n.language !== 'zh';
   const alerts = useLiveQuery(
     () => db.eventAlerts.orderBy('createdAt').reverse().limit(100).toArray(),
     [],
@@ -509,8 +510,8 @@ export default function EventAlertPage() {
                     </div>
                     <span className="text-sm text-slate-600">{new Date(alert.createdAt).toLocaleString()}</span>
                   </div>
-                  <h4 className="font-medium">{alert.title}</h4>
-                  <p className="text-sm text-slate-400 leading-relaxed">{alert.description}</p>
+                  <h4 className="font-medium">{isEn ? (alert.titleEn || alert.title) : alert.title}</h4>
+                  <p className="text-sm text-slate-400 leading-relaxed">{isEn ? (alert.descriptionEn || alert.description) : alert.description}</p>
                   <div className="flex flex-wrap gap-1">
                     {alert.relatedCoins.map(c => (
                       <span key={c} className="text-sm px-1.5 py-0.5 rounded bg-blue-600/10 text-blue-400">{c}</span>
@@ -572,7 +573,7 @@ export default function EventAlertPage() {
                     <div className="flex items-center gap-2">
                       {levelIcon(alert.level)}
                       <span className="text-sm text-slate-500">{grp?.icon || '🔔'} {grp?.label || alert.group}</span>
-                      <span className="font-medium text-sm flex-1">{alert.title}</span>
+                      <span className="font-medium text-sm flex-1">{isEn ? (alert.titleEn || alert.title) : alert.title}</span>
                       <span className="text-sm text-slate-600">{new Date(alert.createdAt).toLocaleString()}</span>
                     </div>
                   </div>

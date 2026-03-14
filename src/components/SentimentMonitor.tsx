@@ -1090,7 +1090,8 @@ function PublicServiceConfigPanel() {
 
 // ==================== 子组件: 简报列表 ====================
 function BriefingList({ briefings }: { briefings: ScanBriefing[] }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isEn = i18n.language !== 'zh';
   const [expandedId, setExpandedId] = useState<string | null>(null);
   return (
     <div className="space-y-2">
@@ -1110,7 +1111,7 @@ function BriefingList({ briefings }: { briefings: ScanBriefing[] }) {
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="text-sm text-slate-600">{time}</span>
                 <span className="text-sm px-1.5 py-0.5 rounded bg-cyan-600/10 text-cyan-400">{b.mode === 'public-service' ? t('sentiment.briefing.public') : t('sentiment.briefing.selfHosted')}</span>
-                <span className="text-sm truncate">{b.marketSummary ? b.marketSummary.slice(0, 60) + '...' : t('sentiment.briefing.noSummary')}</span>
+                <span className="text-sm truncate">{(isEn ? (b.marketSummaryEn || b.marketSummary) : b.marketSummary) ? (isEn ? (b.marketSummaryEn || b.marketSummary) : b.marketSummary).slice(0, 80) + '...' : t('sentiment.briefing.noSummary')}</span>
               </div>
               <div className="flex items-center gap-2 shrink-0 ml-2">
                 <span className="text-sm text-slate-500">{b.triggeredSignals.length} {t('sentiment.briefing.signals')}</span>
@@ -1122,7 +1123,7 @@ function BriefingList({ briefings }: { briefings: ScanBriefing[] }) {
             {isExpanded && (
               <div className="px-4 pb-3 space-y-3 border-t border-slate-800/50">
                 {b.marketSummary && (
-                  <p className="text-sm text-slate-300 leading-relaxed mt-2">{b.marketSummary}</p>
+                  <p className="text-sm text-slate-300 leading-relaxed mt-2">{isEn ? (b.marketSummaryEn || b.marketSummary) : b.marketSummary}</p>
                 )}
                 {b.triggeredSignals.length > 0 && (
                   <div>
@@ -1132,7 +1133,7 @@ function BriefingList({ briefings }: { briefings: ScanBriefing[] }) {
                         <div key={i} className="flex items-center gap-2 text-sm">
                           <span className={s.impact > 0 ? 'text-emerald-400' : 'text-red-400'}>{s.impact > 0 ? '📈' : '📉'}</span>
                           <span className="text-slate-600">#{s.signalId}</span>
-                          <span className="text-slate-300">{s.title}</span>
+                          <span className="text-slate-300">{isEn ? (s.titleEn || s.title) : s.title}</span>
                           <span className={`tabular-nums ${s.impact > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{s.impact > 0 ? '+' : ''}{s.impact}</span>
                         </div>
                       ))}
@@ -1146,7 +1147,7 @@ function BriefingList({ briefings }: { briefings: ScanBriefing[] }) {
                     {b.alerts.map((a, i) => (
                       <div key={i} className="flex items-center gap-2 text-sm">
                         <span>{a.level === 'critical' ? '🔴' : a.level === 'warning' ? '🟡' : '🔵'}</span>
-                        <span className="text-slate-300">{a.title}</span>
+                        <span className="text-slate-300">{isEn ? (a.titleEn || a.title) : a.title}</span>
                       </div>
                     ))}
                   </div>
@@ -1205,8 +1206,10 @@ function PipelineConfigPanel({ scanMode, onModeChange }: { scanMode: ScanMode; o
 }
 
 // ==================== 子组件: 评分仪表盘 ====================
-function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions }: { scores: ScoringResult | null; gridParams: GridAutoParams | null; marketSummary: string; tradeSuggestions: TradeSuggestion[] }) {
-  const { t } = useTranslation();
+function ScoringDashboard({ scores, gridParams, marketSummary, marketSummaryEn, tradeSuggestions }: { scores: ScoringResult | null; gridParams: GridAutoParams | null; marketSummary: string; marketSummaryEn?: string; tradeSuggestions: TradeSuggestion[] }) {
+  const { t, i18n } = useTranslation();
+  const isEn = i18n.language !== 'zh';
+  const displaySummary = isEn ? (marketSummaryEn || marketSummary) : marketSummary;
   const sdColor = (v: number) => v > 20 ? 'text-emerald-400' : v < -20 ? 'text-red-400' : 'text-yellow-400';
   const svColor = (v: number) => v > 70 ? 'text-red-400' : v > 30 ? 'text-yellow-400' : 'text-emerald-400';
   const srColor = (v: number) => v > 85 ? 'text-red-500 animate-pulse' : v > 60 ? 'text-red-400' : v > 30 ? 'text-yellow-400' : 'text-emerald-400';
@@ -1405,14 +1408,14 @@ function ScoringDashboard({ scores, gridParams, marketSummary, tradeSuggestions 
           )}
 
           {/* 市场综合分析 */}
-          {marketSummary && (
+          {displaySummary && (
             <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/15">
               <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
                 <RefreshCw className="w-4 h-4 text-cyan-400" />
                 {t('sentiment.scoring.marketAnalysis')}
                 <span className="text-xs text-slate-500 font-normal ml-auto">{t('sentiment.scoring.scannedAt', { time: new Date(scores.timestamp).toLocaleString() })}</span>
               </h4>
-              <p className="text-sm text-slate-300 leading-relaxed">{marketSummary}</p>
+              <p className="text-sm text-slate-300 leading-relaxed">{displaySummary}</p>
             </div>
           )}
 
@@ -1593,7 +1596,8 @@ function SignalMatrixPanel({ onScan, analyzing, progress }: { onScan: () => void
 
 // ==================== 子组件: 扫描记录 (按扫描批次分组) ====================
 function SignalEventHistory() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isEn = i18n.language !== 'zh';
   const events = useLiveQuery(
     () => db.signalEvents.orderBy('triggeredAt').reverse().limit(200).toArray(),
     [],
@@ -1635,7 +1639,7 @@ function SignalEventHistory() {
           const topGroups = Array.from(groupCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3);
           const isPublic = evts.some(e => e.source.includes('公共服务'));
           const matchedBriefing = briefings?.find(b => Math.abs(b.timestamp - timestamp) < 5000);
-          return { timestamp, events: evts, netImpact, bullish, bearish, topGroups, isPublic, tokenUsage: undefined as any, scanMode: undefined as any, scoreDirection: undefined as number | undefined, scoreVolatility: undefined as number | undefined, scoreRisk: undefined as number | undefined, activeSignals: undefined as number | undefined, marketSummary: matchedBriefing?.marketSummary || '', serverTokenUsage: matchedBriefing?.serverTokenUsage, startedAt: matchedBriefing?.startedAt, completedAt: matchedBriefing?.completedAt };
+          return { timestamp, events: evts, netImpact, bullish, bearish, topGroups, isPublic, tokenUsage: undefined as any, scanMode: undefined as any, scoreDirection: undefined as number | undefined, scoreVolatility: undefined as number | undefined, scoreRisk: undefined as number | undefined, activeSignals: undefined as number | undefined, marketSummary: matchedBriefing?.marketSummary || '', marketSummaryEn: matchedBriefing?.marketSummaryEn || '', serverTokenUsage: matchedBriefing?.serverTokenUsage, startedAt: matchedBriefing?.startedAt, completedAt: matchedBriefing?.completedAt };
         });
     }
 
@@ -1684,6 +1688,7 @@ function SignalEventHistory() {
           scoreRisk: sr.scoreRisk,
           activeSignals: sr.activeSignals,
           marketSummary: matchedBriefing?.marketSummary || '',
+          marketSummaryEn: matchedBriefing?.marketSummaryEn || '',
           serverTokenUsage: sr.serverTokenUsage || matchedBriefing?.serverTokenUsage,
           startedAt: sr.serverStartedAt || matchedBriefing?.startedAt,
           completedAt: sr.serverCompletedAt || matchedBriefing?.completedAt,
@@ -1784,7 +1789,7 @@ function SignalEventHistory() {
                       {scan.marketSummary && (
                         <div className="px-4 py-3 bg-blue-500/5 border-b border-slate-800/30">
                           <p className="text-xs text-slate-500 font-medium mb-1 flex items-center gap-1">📊 {t('sentiment.scoring.marketAnalysis')}</p>
-                          <p className="text-sm text-slate-300 leading-relaxed">{scan.marketSummary}</p>
+                          <p className="text-sm text-slate-300 leading-relaxed">{isEn ? (scan.marketSummaryEn || scan.marketSummary) : scan.marketSummary}</p>
                         </div>
                       )}
                       {scan.events.length === 0 && (
@@ -1805,14 +1810,14 @@ function SignalEventHistory() {
                               {evt.impact > 0 ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> : <TrendingDown className="w-3.5 h-3.5 text-red-400 shrink-0" />}
                               <span className="text-sm px-1.5 py-0.5 rounded bg-slate-800 text-slate-500 shrink-0">{grp?.icon} {grp?.label}</span>
                               <span className="text-sm text-slate-600 shrink-0">#{evt.signalId}</span>
-                              <span className="font-medium text-sm text-slate-200 truncate flex-1">{evt.title}</span>
+                              <span className="font-medium text-sm text-slate-200 truncate flex-1">{isEn ? (evt.titleEn || evt.title) : evt.title}</span>
                               <span className={`text-sm font-bold tabular-nums shrink-0 ${evt.impact > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                 {evt.impact > 0 ? '+' : ''}{evt.impact}
                               </span>
                               <span className="text-sm text-slate-600 shrink-0">{(evt.confidence * 100).toFixed(0)}%</span>
                             </div>
                             {evt.summary && (
-                              <p className="text-sm text-slate-500 mt-1 ml-5 leading-relaxed">{evt.summary}</p>
+                              <p className="text-sm text-slate-500 mt-1 ml-5 leading-relaxed">{isEn ? (evt.summaryEn || evt.summary) : evt.summary}</p>
                             )}
                           </div>
                         );
@@ -1926,7 +1931,8 @@ function SignalEventHistory() {
 
 // ==================== 主组件 ====================
 export default function SentimentMonitor() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isEn = i18n.language !== 'zh';
   const [scanMode, setScanMode] = useState<ScanMode>('self-hosted');
   const [analyzing, setAnalyzing] = useState(false);
   const analyzingRef = useRef(false);
@@ -1934,6 +1940,7 @@ export default function SentimentMonitor() {
   const [scores, setScores] = useState<ScoringResult | null>(null);
   const [gridParams, setGridParams] = useState<GridAutoParams | null>(null);
   const [marketSummary, setMarketSummary] = useState('');
+  const [marketSummaryEn, setMarketSummaryEn] = useState('');
   const [newAlerts, setNewAlerts] = useState<EventAlert[]>([]);
   const [progress, setProgress] = useState<PipelineProgress | null>(null);
   const [pipelineResult, setPipelineResult] = useState<{ hasSearcher: boolean; hasMarketData: boolean; searcherProvider?: string; analyzerProvider: string } | null>(null);
@@ -1992,6 +1999,7 @@ export default function SentimentMonitor() {
     db.scanBriefings.orderBy('receivedAt').reverse().first().then(latest => {
       if (latest?.marketSummary && !marketSummary) {
         setMarketSummary(latest.marketSummary);
+        setMarketSummaryEn(latest.marketSummaryEn || '');
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2002,6 +2010,7 @@ export default function SentimentMonitor() {
       const scanTimestamp = briefing.completedAt ? new Date(briefing.completedAt).getTime() : briefing.timestamp;
       const saved = await saveBriefing(briefing, scanTimestamp);
       setMarketSummary(briefing.marketSummary);
+      setMarketSummaryEn(briefing.marketSummaryEn || '');
       setNewAlerts(saved.alerts);
       setPipelineResult(briefing.pipelineInfo);
 
@@ -2391,7 +2400,7 @@ export default function SentimentMonitor() {
       )}
 
       {/* 评分仪表盘 + 网格调参 */}
-      <ScoringDashboard scores={scores} gridParams={gridParams} marketSummary={marketSummary} tradeSuggestions={latestSuggestions} />
+      <ScoringDashboard scores={scores} gridParams={gridParams} marketSummary={marketSummary} marketSummaryEn={marketSummaryEn} tradeSuggestions={latestSuggestions} />
 
       {/* 新预警 */}
       {newAlerts.length > 0 && (
@@ -2406,9 +2415,9 @@ export default function SentimentMonitor() {
                 <span className={`text-sm px-2 py-0.5 rounded-full font-medium ${alert.level === 'critical' ? 'bg-red-600/20 text-red-400' : alert.level === 'warning' ? 'bg-amber-600/20 text-amber-400' : 'bg-slate-700 text-slate-400'}`}>
                   {alert.level === 'critical' ? t('sentiment.alertCritical') : alert.level === 'warning' ? t('sentiment.alertWarning') : t('sentiment.alertInfo')}
                 </span>
-                <span className="font-medium text-sm">{alert.title}</span>
+                <span className="font-medium text-sm">{isEn ? (alert.titleEn || alert.title) : alert.title}</span>
               </div>
-              <p className="text-sm text-slate-400">{alert.description}</p>
+              <p className="text-sm text-slate-400">{isEn ? (alert.descriptionEn || alert.description) : alert.description}</p>
               <div className="flex flex-wrap gap-1 mt-2">
                 {alert.relatedCoins.map(c => (
                   <span key={c} className="text-sm px-1.5 py-0.5 rounded bg-blue-600/10 text-blue-400">{c}</span>
