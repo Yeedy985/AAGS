@@ -5,21 +5,16 @@ import { db } from '../db';
 import { useStore } from '../store/useStore';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-const INTERVAL_OPTIONS = [
-  { label: '3秒 ⚠️ 高频', value: 3000 },
-  { label: '5秒', value: 5000 },
-  { label: '10秒', value: 10000 },
-  { label: '15秒', value: 15000 },
-  { label: '30秒', value: 30000 },
-  { label: '1分钟', value: 60000 },
-  { label: '2分钟', value: 120000 },
-  { label: '5分钟', value: 300000 },
+const INTERVAL_KEYS: { key: string; value: number }[] = [
+  { key: 'interval3s', value: 3000 },
+  { key: 'interval5s', value: 5000 },
+  { key: 'interval10s', value: 10000 },
+  { key: 'interval15s', value: 15000 },
+  { key: 'interval30s', value: 30000 },
+  { key: 'interval1m', value: 60000 },
+  { key: 'interval2m', value: 120000 },
+  { key: 'interval5m', value: 300000 },
 ];
-
-function formatInterval(ms: number): string {
-  if (ms < 60000) return `${ms / 1000}秒`;
-  return `${ms / 60000}分钟`;
-}
 
 export default function Settings() {
   const { refreshIntervals, setRefreshIntervals } = useStore();
@@ -96,7 +91,7 @@ export default function Settings() {
       const est = await navigator.storage.estimate();
       const used = ((est.usage || 0) / 1024 / 1024).toFixed(2);
       const quota = ((est.quota || 0) / 1024 / 1024).toFixed(0);
-      setExportMsg(`已使用 ${used} MB / ${quota} MB`);
+      setExportMsg(t('settings.storageUsed', { used, quota }));
       setTimeout(() => setExportMsg(''), 5000);
     }
   };
@@ -142,24 +137,24 @@ export default function Settings() {
           {t('settings.refreshInterval')}
         </h3>
         <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>
-          {isMobile ? '配置自动刷新频率，间隔越短 API 请求越多。' : '配置各模块的自动刷新频率。间隔越短数据越实时，但会增加 API 请求频率。'}
+          {isMobile ? t('settings.refreshDescMobile') : t('settings.refreshDesc')}
         </p>
         <div className={`${isMobile ? 'p-2.5' : 'p-3'} rounded-xl ${isMobile ? 'text-xs' : 'text-sm'} text-amber-400/80 space-y-1`} style={{ background: 'linear-gradient(135deg, rgba(234,179,8,0.06) 0%, rgba(15,23,42,0.3) 100%)', border: '1px solid rgba(234,179,8,0.12)' }}>
-          <p className="font-medium">⚠️ API 频率限制提醒</p>
+          <p className="font-medium">{t('settings.apiRateWarning')}</p>
           {!isMobile && (
             <p className="text-amber-400/60">
-              Binance: 1200次/分 · OKX: 20次/2秒 · Bybit: 10次/秒 · Gate: 900次/分 · KuCoin: 30次/3秒 · MEXC: 2次/秒(签名)
+              {t('settings.apiRateDetails')}
             </p>
           )}
           <p className="text-amber-400/60">
-            {isMobile ? '多策略运行时请适当增大间隔，避免触发限流。' : '每个策略每次刷新约需 2-3 次 API 请求。多策略运行时请适当增大间隔，避免触发限流 (HTTP 429) 导致下单失败。'}
+            {isMobile ? t('settings.apiRateHintMobile') : t('settings.apiRateHint')}
           </p>
         </div>
         <div className={`grid ${isMobile ? 'grid-cols-1 gap-3' : 'grid-cols-1 md:grid-cols-3 gap-4'}`}>
           {([
-            { key: 'strategy' as const, label: '策略监控', desc: '订单状态、持仓、风控检查', icon: '⚡' },
-            { key: 'market' as const, label: '市场行情', desc: '价格、涨跌幅、成交量', icon: '📊' },
-            { key: 'account' as const, label: '账户资产', desc: '余额、持仓估值', icon: '💰' },
+            { key: 'strategy' as const, label: t('settings.intervalStrategy'), desc: t('settings.intervalStrategyDesc'), icon: '⚡' },
+            { key: 'market' as const, label: t('settings.intervalMarket'), desc: t('settings.intervalMarketDesc'), icon: '📊' },
+            { key: 'account' as const, label: t('settings.intervalAccount'), desc: t('settings.intervalAccountDesc'), icon: '💰' },
           ]).map(({ key, label, desc, icon }) => (
             <div key={key} className={`${isMobile ? 'p-3 space-y-2' : 'p-4 space-y-3'} rounded-xl`} style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.6) 0%, rgba(30,41,59,0.3) 100%)', border: '1px solid rgba(51,65,85,0.3)' }}>
               <div className="flex items-center gap-2">
@@ -174,12 +169,12 @@ export default function Settings() {
                 value={refreshIntervals[key]}
                 onChange={(e) => setRefreshIntervals({ [key]: Number(e.target.value) })}
               >
-                {INTERVAL_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                {INTERVAL_KEYS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{t(`settings.${opt.key}`)}</option>
                 ))}
               </select>
               <p className="text-sm text-slate-600 text-center">
-                当前: {formatInterval(refreshIntervals[key])}
+                {t('settings.currentInterval', { value: INTERVAL_KEYS.find(o => o.value === refreshIntervals[key]) ? t(`settings.${INTERVAL_KEYS.find(o => o.value === refreshIntervals[key])!.key}`) : `${refreshIntervals[key] / 1000}s` })}
               </p>
             </div>
           ))}
@@ -190,34 +185,15 @@ export default function Settings() {
       <div className={`card ${isMobile ? 'space-y-3' : 'space-y-4'}`}>
         <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold`}>{t('settings.security')}</h3>
         <div className="space-y-3 text-sm text-slate-400">
-          <div className="flex items-start gap-3 p-3.5 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(15,23,42,0.3) 100%)', border: '1px solid rgba(16,185,129,0.1)' }}>
-            <span className="text-emerald-400 mt-0.5 text-sm">✓</span>
-            <div>
-              <p className="text-slate-200 font-medium text-sm">纯本地运行</p>
-              <p className="text-slate-400 text-sm mt-0.5">所有数据和交易逻辑都在您的浏览器中运行，不经过任何中间服务器。</p>
+          {(['securityLocal', 'securityEncrypt', 'securityPermission', 'securityPwa'] as const).map((key) => (
+            <div key={key} className="flex items-start gap-3 p-3.5 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(15,23,42,0.3) 100%)', border: '1px solid rgba(16,185,129,0.1)' }}>
+              <span className="text-emerald-400 mt-0.5 text-sm">✓</span>
+              <div>
+                <p className="text-slate-200 font-medium text-sm">{t(`settings.${key}`)}</p>
+                <p className="text-slate-400 text-sm mt-0.5">{t(`settings.${key}Desc`)}</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-start gap-3 p-3.5 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(15,23,42,0.3) 100%)', border: '1px solid rgba(16,185,129,0.1)' }}>
-            <span className="text-emerald-400 mt-0.5 text-sm">✓</span>
-            <div>
-              <p className="text-slate-200 font-medium text-sm">API Key 加密存储</p>
-              <p className="text-slate-400 text-sm mt-0.5">API Secret 使用 AES-256 加密后存储在本地 IndexedDB 中。</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3 p-3.5 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(15,23,42,0.3) 100%)', border: '1px solid rgba(16,185,129,0.1)' }}>
-            <span className="text-emerald-400 mt-0.5 text-sm">✓</span>
-            <div>
-              <p className="text-slate-200 font-medium text-sm">仅需交易权限</p>
-              <p className="text-slate-400 text-sm mt-0.5">API Key 仅需开启现货交易权限，请勿开启提币权限。建议设置 IP 白名单。</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3 p-3.5 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(15,23,42,0.3) 100%)', border: '1px solid rgba(16,185,129,0.1)' }}>
-            <span className="text-emerald-400 mt-0.5 text-sm">✓</span>
-            <div>
-              <p className="text-slate-200 font-medium text-sm">PWA 支持</p>
-              <p className="text-slate-400 text-sm mt-0.5">可添加到手机桌面使用，支持离线访问（交易功能需联网）。</p>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
@@ -250,10 +226,10 @@ export default function Settings() {
       <div className={`card ${isMobile ? 'space-y-2' : 'space-y-3'}`}>
         <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold`}>{t('settings.about')}</h3>
         <div className="text-sm text-slate-400 space-y-1">
-          <p><span className="text-slate-300">产品名称:</span> Apex Adaptive Grid System</p>
-          <p><span className="text-slate-300">版本:</span> 1.0.0</p>
-          <p><span className="text-slate-300">定位:</span> 面向专业用户的自适应波动率三层网格量化系统</p>
-          <p><span className="text-slate-300">目标:</span> 长期生存和稳定复利，而不是短期暴利</p>
+          <p><span className="text-slate-300">{t('settings.aboutName')}:</span> Apex Adaptive Grid System</p>
+          <p><span className="text-slate-300">{t('settings.aboutVersion')}:</span> 1.0.0</p>
+          <p><span className="text-slate-300">{t('settings.aboutPosition')}:</span> {t('settings.aboutPositionDesc')}</p>
+          <p><span className="text-slate-300">{t('settings.aboutGoal')}:</span> {t('settings.aboutGoalDesc')}</p>
         </div>
       </div>
     </div>

@@ -67,7 +67,7 @@ function ReportStatCard({ title, value, sub, icon: Icon, color, trend }: {
 
 export default function Reports() {
   const { strategies } = useStore();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'all'>('week');
 
@@ -141,9 +141,10 @@ export default function Reports() {
     const sorted = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]).slice(-120);
     const fmtTime = (ts: number) => {
       const d = new Date(ts);
-      if (ms < 60 * 60 * 1000) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-      if (ms < 24 * 60 * 60 * 1000) return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-      return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+      const loc = i18n.language === 'zh' ? 'zh-CN' : 'en-US';
+      if (ms < 60 * 60 * 1000) return d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
+      if (ms < 24 * 60 * 60 * 1000) return d.toLocaleString(loc, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleDateString(loc, { month: 'short', day: 'numeric' });
     };
     return sorted.map(([bucket, s]) => ({
       time: fmtTime(bucket),

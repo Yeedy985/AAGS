@@ -1,6 +1,7 @@
 import { decrypt } from './crypto';
 import type { NotificationConfig, EventAlert, AlertLevel, ScanBriefing, ScoringResult } from '../types';
 import { db } from '../db';
+import { getLang, getLocale } from './langUtil';
 
 // ==================== 全局推送设置 (localStorage) ====================
 export interface GlobalPushSettings {
@@ -166,19 +167,24 @@ function formatAlertMessage(alert: EventAlert): string {
     warning: '⚠️',
     info: 'ℹ️',
   };
+  const isZh = getLang() === 'zh';
   const levelLabel: Record<AlertLevel, string> = {
-    critical: '紧急预警',
-    warning: '重要提醒',
-    info: '信息通知',
+    critical: isZh ? '紧急预警' : 'Critical Alert',
+    warning: isZh ? '重要提醒' : 'Warning',
+    info: isZh ? '信息通知' : 'Info',
   };
 
   const emoji = levelEmoji[alert.level];
   const label = levelLabel[alert.level];
-  const coins = alert.relatedCoins.length > 0 ? `\n相关币种: ${alert.relatedCoins.join(', ')}` : '';
-  const time = new Date(alert.createdAt).toLocaleString('zh-CN');
+  const coinsLabel = isZh ? '相关币种' : 'Related';
+  const coins = alert.relatedCoins.length > 0 ? `\n${coinsLabel}: ${alert.relatedCoins.join(', ')}` : '';
+  const time = new Date(alert.createdAt).toLocaleString(getLocale());
   const scoreInfo = alert.scoreSnapshot
     ? `\nSD: ${alert.scoreSnapshot.sd.toFixed(1)} | SV: ${alert.scoreSnapshot.sv.toFixed(1)} | SR: ${alert.scoreSnapshot.sr.toFixed(1)}`
     : '';
+  const groupLabel = isZh ? '信号组' : 'Group';
+  const sourceLabel = isZh ? '来源' : 'Source';
+  const timeLabel = isZh ? '时间' : 'Time';
 
   return `${emoji} <b>[Sentinel-X ${label}]</b>
 
@@ -186,9 +192,9 @@ function formatAlertMessage(alert: EventAlert): string {
 
 ${alert.description}
 
-信号组: ${alert.group}${scoreInfo}${coins}
-来源: ${alert.source}
-时间: ${time}`;
+${groupLabel}: ${alert.group}${scoreInfo}${coins}
+${sourceLabel}: ${alert.source}
+${timeLabel}: ${time}`;
 }
 
 // ==================== 主推送函数 ====================
@@ -251,7 +257,8 @@ export async function notifyPendingAlerts(): Promise<number> {
 
 // ==================== 格式化扫描结果消息 ====================
 function formatScanResultMessage(briefing: ScanBriefing, scores?: ScoringResult | null): string {
-  const time = new Date(briefing.timestamp).toLocaleString('zh-CN');
+  const isZh = getLang() === 'zh';
+  const time = new Date(briefing.timestamp).toLocaleString(getLocale());
   const sigCount = briefing.triggeredSignals.length;
   const alertCount = briefing.alerts.length;
   const bullish = briefing.triggeredSignals.filter(s => s.impact > 0).length;
@@ -260,7 +267,11 @@ function formatScanResultMessage(briefing: ScanBriefing, scores?: ScoringResult 
 
   let scoreText = '';
   if (scores) {
-    scoreText = `\n\n📊 <b>Sentinel-X 评分</b>\nSD 方向: ${scores.scoreDirection.toFixed(1)} | SV 波动: ${scores.scoreVolatility.toFixed(1)} | SR 风险: ${scores.scoreRisk.toFixed(1)}`;
+    const lbl = isZh ? 'Sentinel-X 评分' : 'Sentinel-X Scores';
+    const sd = isZh ? 'SD 方向' : 'SD Direction';
+    const sv = isZh ? 'SV 波动' : 'SV Volatility';
+    const sr = isZh ? 'SR 风险' : 'SR Risk';
+    scoreText = `\n\n📊 <b>${lbl}</b>\n${sd}: ${scores.scoreDirection.toFixed(1)} | ${sv}: ${scores.scoreVolatility.toFixed(1)} | ${sr}: ${scores.scoreRisk.toFixed(1)}`;
   }
 
   const topSignals = briefing.triggeredSignals
@@ -269,11 +280,21 @@ function formatScanResultMessage(briefing: ScanBriefing, scores?: ScoringResult 
     .map(s => `  ${s.impact > 0 ? '📈' : '📉'} ${escapeHtml(s.title)} (${s.impact > 0 ? '+' : ''}${s.impact})`)
     .join('\n');
 
+  const summaryLabel = isZh ? '市场综合分析' : 'Market Analysis';
   const summary = briefing.marketSummary
-    ? `\n\n📋 <b>市场综合分析</b>\n${escapeHtml(briefing.marketSummary)}`
+    ? `\n\n📋 <b>${summaryLabel}</b>\n${escapeHtml(briefing.marketSummary)}`
     : '';
 
-  return `🔍 <b>[Sentinel-X 信号扫描报告]</b>\n\n⏰ 时间: ${time}\n📡 触发信号: ${sigCount} 个 (📈${bullish} 📉${bearish})\n⚡ 净影响: ${netImpact > 0 ? '+' : ''}${netImpact}\n${alertCount > 0 ? `🚨 预警: ${alertCount} 条\n` : ''}${scoreText}${summary}${topSignals ? `\n\n🔥 <b>主要信号</b>\n${topSignals}` : ''}`;
+  const title = isZh ? 'Sentinel-X 信号扫描报告' : 'Sentinel-X Signal Scan Report';
+  const timeLbl = isZh ? '时间' : 'Time';
+  const sigLbl = isZh ? '触发信号' : 'Signals';
+  const sigUnit = isZh ? '个' : '';
+  const netLbl = isZh ? '净影响' : 'Net Impact';
+  const alertLbl = isZh ? '预警' : 'Alerts';
+  const alertUnit = isZh ? '条' : '';
+  const topLbl = isZh ? '主要信号' : 'Top Signals';
+
+  return `🔍 <b>[${title}]</b>\n\n⏰ ${timeLbl}: ${time}\n📡 ${sigLbl}: ${sigCount}${sigUnit ? ' ' + sigUnit : ''} (📈${bullish} 📉${bearish})\n⚡ ${netLbl}: ${netImpact > 0 ? '+' : ''}${netImpact}\n${alertCount > 0 ? `🚨 ${alertLbl}: ${alertCount}${alertUnit ? ' ' + alertUnit : ''}\n` : ''}${scoreText}${summary}${topSignals ? `\n\n🔥 <b>${topLbl}</b>\n${topSignals}` : ''}`;
 }
 
 // ==================== 推送扫描结果 ====================
@@ -317,7 +338,10 @@ export async function notifyScanResult(briefing: ScanBriefing, scores?: ScoringR
 
 // ==================== 测试通知 ====================
 export async function testNotification(config: NotificationConfig): Promise<boolean> {
-  const testMsg = `✅ <b>[AAGS 通知测试]</b>\n\n通知渠道 ${config.channel === 'telegram' ? 'Telegram' : 'WhatsApp'} 配置成功！\n\n时间: ${new Date().toLocaleString('zh-CN')}`;
+  const isZh = getLang() === 'zh';
+  const testMsg = isZh
+    ? `✅ <b>[AAGS 通知测试]</b>\n\n通知渠道 ${config.channel === 'telegram' ? 'Telegram' : 'WhatsApp'} 配置成功！\n\n时间: ${new Date().toLocaleString('zh-CN')}`
+    : `✅ <b>[AAGS Notification Test]</b>\n\n${config.channel === 'telegram' ? 'Telegram' : 'WhatsApp'} channel configured successfully!\n\nTime: ${new Date().toLocaleString('en-US')}`;
 
   if (config.channel === 'telegram') {
     return sendTelegram(config, testMsg);
@@ -332,13 +356,14 @@ export async function notifyScanFailure(reason: string, detail: string): Promise
   const configs = await db.notificationConfigs.filter(c => c.enabled).toArray();
   if (configs.length === 0) return [];
 
-  const now = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+  const isZh = getLang() === 'zh';
+  const now = new Date().toLocaleString(getLocale(), { timeZone: 'Asia/Shanghai' });
   const message = [
-    `🚨 <b>[Sentinel-X 扫描失败]</b>`,
+    `🚨 <b>[${isZh ? 'Sentinel-X 扫描失败' : 'Sentinel-X Scan Failed'}]</b>`,
     ``,
-    `⚠️ <b>原因:</b> ${reason}`,
-    detail ? `📋 <b>详情:</b> ${detail}` : '',
-    `🕐 <b>时间:</b> ${now}`,
+    `⚠️ <b>${isZh ? '原因' : 'Reason'}:</b> ${reason}`,
+    detail ? `📋 <b>${isZh ? '详情' : 'Detail'}:</b> ${detail}` : '',
+    `🕐 <b>${isZh ? '时间' : 'Time'}:</b> ${now}`,
   ].filter(Boolean).join('\n');
 
   const successChannels: string[] = [];
@@ -362,7 +387,7 @@ export async function notifyScanFailure(reason: string, detail: string): Promise
 export async function diagnosticTest(config: NotificationConfig): Promise<string> {
   const steps: string[] = [];
   try {
-    steps.push(`渠道: ${config.channel}`);
+    steps.push(`${getLang() === 'zh' ? '渠道' : 'Channel'}: ${config.channel}`);
 
     if (config.channel === 'telegram') {
       if (!config.telegramBotToken) return '❌ Bot Token 为空';
@@ -384,7 +409,7 @@ export async function diagnosticTest(config: NotificationConfig): Promise<string
 
       const body = {
         chat_id: config.telegramChatId,
-        text: '✅ [AAGS] 诊断测试消息 - ' + new Date().toLocaleString('zh-CN'),
+        text: '✅ [AAGS] ' + (getLang() === 'zh' ? '诊断测试消息' : 'Diagnostic test message') + ' - ' + new Date().toLocaleString(getLocale()),
         parse_mode: 'HTML',
       };
 
@@ -415,7 +440,7 @@ export async function diagnosticTest(config: NotificationConfig): Promise<string
         return steps.join('\n');
       }
     } else {
-      return '仅支持 Telegram 诊断';
+      return getLang() === 'zh' ? '仅支持 Telegram 诊断' : 'Only Telegram diagnostics supported';
     }
   } catch (err: any) {
     steps.push(`❌ 异常: ${err.message}`);
@@ -428,12 +453,12 @@ export async function testScanResultPush(): Promise<{ success: boolean; channels
   try {
     const briefing = await db.scanBriefings.orderBy('receivedAt').reverse().first();
     if (!briefing) {
-      return { success: false, channels: [], error: '暂无扫描记录，请先执行一次信号扫描' };
+      return { success: false, channels: [], error: getLang() === 'zh' ? '暂无扫描记录，请先执行一次信号扫描' : 'No scan records yet. Please run a signal scan first.' };
     }
 
     const configs = await db.notificationConfigs.filter(c => c.enabled).toArray();
     if (configs.length === 0) {
-      return { success: false, channels: [], error: '没有已启用的推送渠道' };
+      return { success: false, channels: [], error: getLang() === 'zh' ? '没有已启用的推送渠道' : 'No enabled push channels' };
     }
 
     console.log('[testScanResultPush] briefing:', briefing.briefingId, 'channels:', configs.length);

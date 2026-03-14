@@ -3,6 +3,8 @@
  * 从免费 API 采集实时市场数据，作为信号分析的数据基础
  */
 
+import { getLang as _getLang, getLocale as _getLocale } from './langUtil';
+
 const isDev = import.meta.env.DEV;
 
 // ==================== 类型定义 ====================
@@ -176,40 +178,42 @@ export async function collectMarketData(): Promise<MarketDataSnapshot> {
 
 // ==================== 格式化为 Prompt 文本 ====================
 export function formatMarketDataForPrompt(snapshot: MarketDataSnapshot): string {
-  const time = new Date(snapshot.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-  let text = `## 📡 实时市场数据 (采集时间: ${time})\n`;
+  const loc = _getLocale();
+  const isZh = _getLang() === 'zh';
+  const time = new Date(snapshot.timestamp).toLocaleString(loc, { timeZone: 'Asia/Shanghai' });
+  let text = `## 📡 ${isZh ? '实时市场数据' : 'Real-time Market Data'} (${isZh ? '采集时间' : 'Collected at'}: ${time})\n`;
 
-  // 恐贪指数
   if (snapshot.fearGreed) {
     const fg = snapshot.fearGreed;
     const emoji = fg.value >= 75 ? '🟢' : fg.value >= 55 ? '🟡' : fg.value >= 45 ? '⚪' : fg.value >= 25 ? '🟠' : '🔴';
-    text += `\n### 恐惧贪婪指数\n${emoji} ${fg.value}/100 (${fg.classification})\n`;
+    text += `\n### ${isZh ? '恐惧贪婪指数' : 'Fear & Greed Index'}\n${emoji} ${fg.value}/100 (${fg.classification})\n`;
   }
 
-  // 主流币行情
   if (snapshot.prices.length > 0) {
-    text += `\n### 主流币行情\n`;
+    text += `\n### ${isZh ? '主流币行情' : 'Major Coin Prices'}\n`;
+    const volLabel = isZh ? '量' : 'Vol';
+    const mcLabel = isZh ? '市值' : 'MCap';
     for (const coin of snapshot.prices) {
       const arrow = coin.changePercent24h >= 0 ? '📈' : '📉';
       const sign = coin.changePercent24h >= 0 ? '+' : '';
-      text += `${arrow} ${coin.symbol}: $${coin.price.toLocaleString()} (24h ${sign}${coin.changePercent24h.toFixed(2)}%) | 量 $${(coin.volume24h / 1e9).toFixed(2)}B | 市值 $${(coin.marketCap / 1e9).toFixed(1)}B\n`;
+      text += `${arrow} ${coin.symbol}: $${coin.price.toLocaleString()} (24h ${sign}${coin.changePercent24h.toFixed(2)}%) | ${volLabel} $${(coin.volume24h / 1e9).toFixed(2)}B | ${mcLabel} $${(coin.marketCap / 1e9).toFixed(1)}B\n`;
     }
   }
 
-  // 热门币
   if (snapshot.trending.length > 0) {
-    text += `\n### 热门搜索币种 (CoinGecko Trending)\n`;
+    text += `\n### ${isZh ? '热门搜索币种' : 'Trending Coins'} (CoinGecko Trending)\n`;
+    const rankLabel = isZh ? '市值排名' : 'MCap Rank';
     for (const coin of snapshot.trending) {
-      text += `🔥 ${coin.name} (${coin.symbol}) | 市值排名 #${coin.marketCapRank || '?'}\n`;
+      text += `🔥 ${coin.name} (${coin.symbol}) | ${rankLabel} #${coin.marketCapRank || '?'}\n`;
     }
   }
 
-  // 最新新闻
   if (snapshot.news.length > 0) {
-    text += `\n### 最新加密货币新闻 (近24小时)\n`;
+    text += `\n### ${isZh ? '最新加密货币新闻 (近24小时)' : 'Latest Crypto News (Past 24h)'}\n`;
+    const srcLabel = isZh ? '来源' : 'Source';
     for (const news of snapshot.news.slice(0, 15)) {
-      const t = new Date(news.publishedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-      text += `[${t}] **${news.title}**\n  ${news.body.slice(0, 200)}...\n  来源: ${news.source}\n\n`;
+      const t = new Date(news.publishedAt).toLocaleString(loc, { timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      text += `[${t}] **${news.title}**\n  ${news.body.slice(0, 200)}...\n  ${srcLabel}: ${news.source}\n\n`;
     }
   }
 

@@ -9,18 +9,53 @@ import type {
 } from '../types';
 
 // ==================== 10组信号配置 ====================
-export const SIGNAL_GROUPS: SignalGroupConfig[] = [
-  { id: 'G1',  label: '宏观流动性',       icon: '💰', description: 'CPI/PCE/NFP/DXY/美债/M2/VIX — 决定市场Beta环境', range: [1, 30] },
-  { id: 'G2',  label: '央行与利率政策',   icon: '🏦', description: 'FOMC利率/RRP/BTFP/央行行长讲话 — 流动性阀门', range: [31, 65] },
-  { id: 'G3',  label: '监管与合规',       icon: '⚖️', description: 'SEC ETF/证券认定/MiCA/稳定币法案 — 合规溢价', range: [66, 95] },
-  { id: 'G4',  label: '机构资金流',       icon: '🏛️', description: 'ETF净流/交易所库存/稳定币铸造 — 真实买卖证据', range: [96, 130] },
-  { id: 'G5',  label: '链上物理流',       icon: '⛓️', description: '巨鲸/矿工/LTH·STH/Smart Money — 链上行为', range: [131, 160] },
-  { id: 'G6',  label: '市场结构',         icon: '📐', description: '资金费率/爆仓/OI/盘口深度/PoR — 爆仓插针预防', range: [161, 190] },
-  { id: 'G7',  label: '情绪指标',         icon: '🧠', description: '恐慌贪婪/Google/Twitter/社交热度 — 群体情绪', range: [191, 220] },
-  { id: 'G8',  label: '叙事与赛道',       icon: '🚀', description: 'AI/RWA/L2/DePIN/代币解锁/减半 — 板块轮动', range: [221, 255] },
-  { id: 'G9',  label: '黑天鹅与安全',     icon: '🦢', description: '交易所被黑/协议漏洞/稳定币脱锚 — 致命风险', range: [256, 285] },
-  { id: 'G10', label: '关键人物与地缘',   icon: '🎯', description: 'Musk/Saylor/Trump推文/地缘冲突 — 非对称风险', range: [286, 300] },
-];
+const SIGNAL_GROUPS_I18N: Record<string, { label: { zh: string; en: string }; description: { zh: string; en: string } }> = {
+  G1:  { label: { zh: '宏观流动性', en: 'Macro Liquidity' }, description: { zh: 'CPI/PCE/NFP/DXY/美债/M2/VIX — 决定市场Beta环境', en: 'CPI/PCE/NFP/DXY/Treasuries/M2/VIX — Market beta environment' } },
+  G2:  { label: { zh: '央行与利率政策', en: 'Central Bank & Rates' }, description: { zh: 'FOMC利率/RRP/BTFP/央行行长讲话 — 流动性阀门', en: 'FOMC rates/RRP/BTFP/CB speeches — Liquidity valve' } },
+  G3:  { label: { zh: '监管与合规', en: 'Regulation & Compliance' }, description: { zh: 'SEC ETF/证券认定/MiCA/稳定币法案 — 合规溢价', en: 'SEC ETF/securities/MiCA/stablecoin bills — Compliance premium' } },
+  G4:  { label: { zh: '机构资金流', en: 'Institutional Flow' }, description: { zh: 'ETF净流/交易所库存/稳定币铸造 — 真实买卖证据', en: 'ETF flow/exchange reserves/stablecoin minting — Real buy/sell evidence' } },
+  G5:  { label: { zh: '链上物理流', en: 'On-chain Flow' }, description: { zh: '巨鲸/矿工/LTH·STH/Smart Money — 链上行为', en: 'Whales/miners/LTH·STH/Smart Money — On-chain behavior' } },
+  G6:  { label: { zh: '市场结构', en: 'Market Structure' }, description: { zh: '资金费率/爆仓/OI/盘口深度/PoR — 爆仓插针预防', en: 'Funding rate/liquidations/OI/orderbook depth/PoR — Liquidation prevention' } },
+  G7:  { label: { zh: '情绪指标', en: 'Sentiment Indicators' }, description: { zh: '恐慌贪婪/Google/Twitter/社交热度 — 群体情绪', en: 'Fear & Greed/Google/Twitter/social — Crowd sentiment' } },
+  G8:  { label: { zh: '叙事与赛道', en: 'Narratives & Sectors' }, description: { zh: 'AI/RWA/L2/DePIN/代币解锁/减半 — 板块轮动', en: 'AI/RWA/L2/DePIN/token unlocks/halving — Sector rotation' } },
+  G9:  { label: { zh: '黑天鹅与安全', en: 'Black Swan & Security' }, description: { zh: '交易所被黑/协议漏洞/稳定币脱锚 — 致命风险', en: 'Exchange hacks/protocol exploits/depeg — Fatal risk' } },
+  G10: { label: { zh: '关键人物与地缘', en: 'Key Figures & Geopolitics' }, description: { zh: 'Musk/Saylor/Trump推文/地缘冲突 — 非对称风险', en: 'Musk/Saylor/Trump tweets/geopolitical conflicts — Asymmetric risk' } },
+};
+
+function _getLang(): 'zh' | 'en' {
+  try {
+    const stored = localStorage.getItem('aags_language');
+    if (stored === 'zh' || stored === 'en') return stored;
+    if (typeof navigator !== 'undefined' && navigator.language?.startsWith('zh')) return 'zh';
+  } catch {}
+  return 'en';
+}
+
+function buildSignalGroups(): SignalGroupConfig[] {
+  const lang = _getLang();
+  const bases: { id: SignalGroup; icon: string; range: [number, number] }[] = [
+    { id: 'G1',  icon: '💰', range: [1, 30] },
+    { id: 'G2',  icon: '🏦', range: [31, 65] },
+    { id: 'G3',  icon: '⚖️', range: [66, 95] },
+    { id: 'G4',  icon: '🏛️', range: [96, 130] },
+    { id: 'G5',  icon: '⛓️', range: [131, 160] },
+    { id: 'G6',  icon: '📐', range: [161, 190] },
+    { id: 'G7',  icon: '🧠', range: [191, 220] },
+    { id: 'G8',  icon: '🚀', range: [221, 255] },
+    { id: 'G9',  icon: '🦢', range: [256, 285] },
+    { id: 'G10', icon: '🎯', range: [286, 300] },
+  ];
+  return bases.map(g => {
+    const i18n = SIGNAL_GROUPS_I18N[g.id];
+    return { ...g, label: i18n?.label[lang] || g.id, description: i18n?.description[lang] || '' };
+  });
+}
+
+export const SIGNAL_GROUPS: SignalGroupConfig[] = buildSignalGroups();
+
+export function getLocalizedSignalGroups(): SignalGroupConfig[] {
+  return buildSignalGroups();
+}
 
 // ==================== 300条信号字典 ====================
 type SigDef = Omit<SignalDefinition, 'id' | 'enabled'>;

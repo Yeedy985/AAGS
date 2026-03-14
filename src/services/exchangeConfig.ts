@@ -1,5 +1,49 @@
 import type { ExchangeConfig, ExchangeType } from '../types';
 
+const EXCHANGE_I18N: Record<ExchangeType, { name: { zh: string; en: string }; features: { zh: string[]; en: string[] } }> = {
+  binance: {
+    name: { zh: 'Binance 币安', en: 'Binance' },
+    features: { zh: ['全球最大交易所', '交易对最多', '流动性最强', '手续费 0.1%'], en: ['Largest global exchange', 'Most trading pairs', 'Best liquidity', 'Fee 0.1%'] },
+  },
+  okx: {
+    name: { zh: 'OKX 欧易', en: 'OKX' },
+    features: { zh: ['衍生品丰富', '统一账户', '需要Passphrase', '手续费 0.08%-0.1%'], en: ['Rich derivatives', 'Unified account', 'Requires Passphrase', 'Fee 0.08%-0.1%'] },
+  },
+  bybit: {
+    name: { zh: 'Bybit', en: 'Bybit' },
+    features: { zh: ['衍生品强劲', '统一交易账户', '手续费 0.1%', '跟单交易'], en: ['Strong derivatives', 'Unified trading account', 'Fee 0.1%', 'Copy trading'] },
+  },
+  gate: {
+    name: { zh: 'Gate.io 芝麻开门', en: 'Gate.io' },
+    features: { zh: ['币种最多', '新币上线快', '手续费 0.2%', '量化API友好'], en: ['Most coins listed', 'Fast new listings', 'Fee 0.2%', 'Quant-friendly API'] },
+  },
+  bitget: {
+    name: { zh: 'Bitget', en: 'Bitget' },
+    features: { zh: ['跟单社交交易', '需要Passphrase', '手续费 0.1%', '合约强'], en: ['Social copy trading', 'Requires Passphrase', 'Fee 0.1%', 'Strong futures'] },
+  },
+  kucoin: {
+    name: { zh: 'KuCoin 库币', en: 'KuCoin' },
+    features: { zh: ['新币种丰富', '需要Passphrase', '手续费 0.1%', 'API友好'], en: ['Rich new coins', 'Requires Passphrase', 'Fee 0.1%', 'API-friendly'] },
+  },
+  huobi: {
+    name: { zh: 'HTX (原火币)', en: 'HTX (ex-Huobi)' },
+    features: { zh: ['老牌交易所', '品牌更名HTX', '手续费 0.2%', '亚太用户多'], en: ['Established exchange', 'Rebranded to HTX', 'Fee 0.2%', 'Popular in Asia'] },
+  },
+  mexc: {
+    name: { zh: 'MEXC 抹茶', en: 'MEXC' },
+    features: { zh: ['小币种多', '零手续费活动', 'Binance兼容API', '上币快'], en: ['Many altcoins', 'Zero-fee events', 'Binance-compatible API', 'Fast listings'] },
+  },
+};
+
+function getLang(): 'zh' | 'en' {
+  try {
+    const stored = localStorage.getItem('aags_language');
+    if (stored === 'zh' || stored === 'en') return stored;
+    if (typeof navigator !== 'undefined' && navigator.language?.startsWith('zh')) return 'zh';
+  } catch {}
+  return 'en';
+}
+
 export const EXCHANGE_CONFIGS: Record<ExchangeType, ExchangeConfig> = {
   binance: {
     id: 'binance',
@@ -207,7 +251,22 @@ export const EXCHANGE_CONFIGS: Record<ExchangeType, ExchangeConfig> = {
 export const EXCHANGE_LIST = Object.values(EXCHANGE_CONFIGS);
 
 export function getExchangeConfig(exchange: ExchangeType): ExchangeConfig {
-  return EXCHANGE_CONFIGS[exchange];
+  const config = EXCHANGE_CONFIGS[exchange];
+  const lang = getLang();
+  const i18n = EXCHANGE_I18N[exchange];
+  if (i18n) {
+    return { ...config, name: i18n.name[lang], features: i18n.features[lang] };
+  }
+  return config;
+}
+
+export function getExchangeList(): ExchangeConfig[] {
+  const lang = getLang();
+  return Object.values(EXCHANGE_CONFIGS).map(config => {
+    const i18n = EXCHANGE_I18N[config.id];
+    if (i18n) return { ...config, name: i18n.name[lang], features: i18n.features[lang] };
+    return config;
+  });
 }
 
 export function needsPassphrase(exchange: ExchangeType): boolean {

@@ -365,7 +365,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                               </p>
                               <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-0.5`}>
                                 {config.apiKey.slice(0, 6)}...{config.apiKey.slice(-4)}
-                                {!isMobile && <span className="ml-3">{new Date(config.createdAt).toLocaleDateString('zh-CN')}</span>}
+                                {!isMobile && <span className="ml-3">{new Date(config.createdAt).toLocaleDateString()}</span>}
                               </p>
                             </div>
                           </div>

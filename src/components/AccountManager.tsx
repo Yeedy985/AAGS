@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore';
 import { db } from '../db';
 import { encrypt } from '../services/crypto';
 import { getAccountInfo, getTicker24h, setCurrentExchange } from '../services/binance';
-import { EXCHANGE_LIST, needsPassphrase, getExchangeConfig } from '../services/exchangeConfig';
+import { getExchangeList, needsPassphrase, getExchangeConfig } from '../services/exchangeConfig';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { ApiConfig, ExchangeType, AssetBalance } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -264,7 +264,7 @@ export default function AccountManager() {
 
         {/* Exchange Grid */}
         <div className={`grid ${isMobile ? 'grid-cols-2 gap-2' : 'grid-cols-2 sm:grid-cols-4 gap-3'}`}>
-          {EXCHANGE_LIST.map((ex) => (
+          {getExchangeList().map((ex) => (
             <button
               key={ex.id}
               className={`relative ${isMobile ? 'p-2' : 'p-3'} rounded-xl border text-left transition-all duration-200 ${
@@ -428,7 +428,7 @@ export default function AccountManager() {
                       </p>
                       <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-0.5`}>
                         {config.apiKey.slice(0, 6)}...{config.apiKey.slice(-4)}
-                        {!isMobile && <span className="ml-3">{new Date(config.createdAt).toLocaleDateString('zh-CN')}</span>}
+                        {!isMobile && <span className="ml-3">{new Date(config.createdAt).toLocaleDateString()}</span>}
                       </p>
                     </div>
                   </div>
@@ -592,7 +592,7 @@ export default function AccountManager() {
             <div className={`${isMobile ? 'p-2.5' : 'p-4'} rounded-xl`} style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(15,23,42,0.5) 100%)', border: '1px solid rgba(16,185,129,0.15)' }}>
               <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 font-medium`}>{t('account.lastUpdate')}</p>
               <p className={`${isMobile ? 'text-xs' : 'text-lg'} font-bold mt-0.5 tracking-tight`}>
-                {new Date(accountInfo.updateTime).toLocaleTimeString('zh-CN')}
+                {new Date(accountInfo.updateTime).toLocaleTimeString()}
               </p>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import { 
   LayoutDashboard, Settings, TrendingUp, Grid3x3, Shield, 
   Wallet, BarChart3, Zap, ChevronLeft, ChevronRight,
-  Newspaper, BellRing, MoreHorizontal, X,
+  Newspaper, BellRing, MoreHorizontal, X, Globe,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,7 +31,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const { activeTab, setActiveTab, isConnected } = useStore();
   const isMobile = useIsMobile();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // ==================== 移动端布局 ====================
   if (isMobile) {
@@ -56,6 +56,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => { const next = i18n.language === 'zh' ? 'en' : 'zh'; i18n.changeLanguage(next); }}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+              title={i18n.language === 'zh' ? 'English' : '中文'}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>{i18n.language === 'zh' ? 'EN' : '中'}</span>
+            </button>
             <div className="relative">
               <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-red-400'}`} />
               {isConnected && <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-40" />}
@@ -207,8 +215,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
+        {/* Language Switcher */}
+        <div className="px-3 py-2" style={{ borderTop: '1px solid rgba(51,65,85,0.25)' }}>
+          <button
+            onClick={() => { const next = i18n.language === 'zh' ? 'en' : 'zh'; i18n.changeLanguage(next); }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-slate-500 hover:text-slate-200 hover:bg-white/[0.03] transition-all`}
+            title={i18n.language === 'zh' ? 'Switch to English' : '切换到中文'}
+          >
+            <Globe className="w-[18px] h-[18px] shrink-0" />
+            {!collapsed && <span>{i18n.language === 'zh' ? 'English' : '中文'}</span>}
+          </button>
+        </div>
+
         {/* Connection Status */}
-        <div className="px-3 py-3" style={{ borderTop: '1px solid rgba(51,65,85,0.25)' }}>
+        <div className="px-3 py-3" style={{ borderTop: '1px solid rgba(51,65,85,0.15)' }}>
           <div className="flex items-center gap-2.5">
             <div className="relative">
               <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-red-400'}`} />

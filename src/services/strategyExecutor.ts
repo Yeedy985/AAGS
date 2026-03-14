@@ -26,8 +26,8 @@ export function setExecutorCallbacks(opts: {
 }
 
 function log(strategyId: number, msg: string) {
-  const ts = new Date().toLocaleTimeString('zh-CN');
-  console.log(`[策略${strategyId}][${ts}] ${msg}`);
+  const ts = new Date().toLocaleTimeString();
+  console.log(`[Strategy${strategyId}][${ts}] ${msg}`);
   _onLog?.(strategyId, msg);
 }
 

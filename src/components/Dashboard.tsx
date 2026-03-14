@@ -8,6 +8,7 @@ import { updateStrategyProfit } from '../services/strategyExecutor';
 import type { EquitySnapshot, TradeRecord } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 
 const STAT_STYLES: Record<string, { bg: string; shadow: string; text: string }> = {
   blue:   { bg: 'linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(59,130,246,0.05) 100%)', shadow: '0 2px 10px -2px rgba(59,130,246,0.25)', text: 'text-blue-400' },
@@ -112,10 +113,11 @@ export default function Dashboard() {
     // 根据粒度选择时间格式
     const fmtTime = (ts: number) => {
       const d = new Date(ts);
-      if (ms < 60 * 1000) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      if (ms < 24 * 60 * 60 * 1000) return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-      if (ms < 7 * 24 * 60 * 60 * 1000) return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-      return d.toLocaleDateString('zh-CN', { year: '2-digit', month: 'short', day: 'numeric' });
+      const loc = i18n.language === 'zh' ? 'zh-CN' : 'en-US';
+      if (ms < 60 * 1000) return d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (ms < 24 * 60 * 60 * 1000) return d.toLocaleString(loc, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      if (ms < 7 * 24 * 60 * 60 * 1000) return d.toLocaleDateString(loc, { month: 'short', day: 'numeric' });
+      return d.toLocaleDateString(loc, { year: '2-digit', month: 'short', day: 'numeric' });
     };
     return sorted.map(([bucket, s]) => ({
       time: fmtTime(bucket),
@@ -167,9 +169,10 @@ export default function Dashboard() {
     const sorted = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]).slice(-200);
     const fmtTime = (ts: number) => {
       const d = new Date(ts);
-      if (ms <= 60_000) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-      if (ms <= 3600_000) return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-      return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+      const loc2 = i18n.language === 'zh' ? 'zh-CN' : 'en-US';
+      if (ms <= 60_000) return d.toLocaleTimeString(loc2, { hour: '2-digit', minute: '2-digit' });
+      if (ms <= 3600_000) return d.toLocaleString(loc2, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleDateString(loc2, { month: 'numeric', day: 'numeric' });
     };
     return sorted.map(([bucket, b]) => ({
       time: fmtTime(bucket),
@@ -200,7 +203,7 @@ export default function Dashboard() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">{t('dashboard.title')}</h1>
           <span className="text-sm text-slate-500 font-medium">
-            {new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
+            {new Date().toLocaleDateString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
           </span>
         </div>
       )}
@@ -447,7 +450,7 @@ export default function Dashboard() {
                       <p className={`${cellText} text-slate-500`}>
                         {isMobile
                           ? `${runtime !== '--' ? `${t('strategy.running')} ${runtime}` : t('strategy.notStarted')}`
-                          : `${t('strategy.createdTime')} ${new Date(s.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}${s.startedAt ? `, ${t('strategy.runtime')} ${runtime}` : ''}`
+                          : `${t('strategy.createdTime')} ${new Date(s.createdAt).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}${s.startedAt ? `, ${t('strategy.runtime')} ${runtime}` : ''}`
                         }
                       </p>
                     </div>

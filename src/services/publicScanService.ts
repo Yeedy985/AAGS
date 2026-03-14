@@ -11,6 +11,7 @@
  */
 import { decrypt } from './crypto';
 import { db } from '../db';
+import { getLang, getLocale } from './langUtil';
 import type {
   PublicServiceConfig, ScanBriefing, ScanMode,
   SignalEvent, EventAlert, AlertLevel, SignalGroup,
@@ -308,28 +309,29 @@ export async function notifyBriefing(briefing: ScanBriefing): Promise<void> {
 
 // ==================== 格式化简报为通知消息 ====================
 export function formatBriefingMessage(briefing: ScanBriefing): string {
-  const time = new Date(briefing.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-  let msg = `🛡️ <b>[Sentinel-X 扫描简报]</b>\n\n`;
+  const isZh = getLang() === 'zh';
+  const time = new Date(briefing.timestamp).toLocaleString(getLocale(), { timeZone: 'Asia/Shanghai' });
+  let msg = `🛡️ <b>[${isZh ? 'Sentinel-X 扫描简报' : 'Sentinel-X Scan Briefing'}]</b>\n\n`;
   msg += `⏰ ${time}\n\n`;
 
   if (briefing.marketSummary) {
-    msg += `📊 <b>市场概述</b>\n${briefing.marketSummary}\n\n`;
+    msg += `📊 <b>${isZh ? '市场概述' : 'Market Summary'}</b>\n${briefing.marketSummary}\n\n`;
   }
 
   if (briefing.triggeredSignals.length > 0) {
-    msg += `⚡ <b>触发信号 (${briefing.triggeredSignals.length})</b>\n`;
+    msg += `⚡ <b>${isZh ? '触发信号' : 'Triggered Signals'} (${briefing.triggeredSignals.length})</b>\n`;
     for (const sig of briefing.triggeredSignals.slice(0, 10)) {
       const arrow = sig.impact > 0 ? '📈' : '📉';
       msg += `${arrow} #${sig.signalId} ${sig.title} (${sig.impact > 0 ? '+' : ''}${sig.impact})\n`;
     }
     if (briefing.triggeredSignals.length > 10) {
-      msg += `...还有 ${briefing.triggeredSignals.length - 10} 条\n`;
+      msg += `...${isZh ? '还有' : 'and'} ${briefing.triggeredSignals.length - 10} ${isZh ? '条' : 'more'}\n`;
     }
     msg += '\n';
   }
 
   if (briefing.alerts.length > 0) {
-    msg += `🚨 <b>预警 (${briefing.alerts.length})</b>\n`;
+    msg += `🚨 <b>${isZh ? '预警' : 'Alerts'} (${briefing.alerts.length})</b>\n`;
     for (const alert of briefing.alerts) {
       const emoji = alert.level === 'critical' ? '🔴' : alert.level === 'warning' ? '🟡' : '🔵';
       msg += `${emoji} ${alert.title}\n`;

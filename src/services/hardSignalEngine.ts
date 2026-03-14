@@ -24,8 +24,10 @@
  */
 
 import type { SignalEvent, SignalGroup } from '../types';
+import { getLang } from './langUtil';
 
 const isDev = import.meta.env.DEV;
+const _zh = () => getLang() === 'zh';
 
 // ==================== API URL Helpers ====================
 function binanceFuturesUrl(path: string): string {
@@ -93,15 +95,15 @@ const HARD_SIGNAL_RULES: HardSignalRule[] = [
 
   // #116 稳定币总市值变化 (用绝对值阈值判断增长/萎缩)
   {
-    signalId: 116, group: 'G4', name: '稳定币总市值', category: 'D', halfLife: 2880,
+    signalId: 116, group: 'G4', name: _zh() ? '稳定币总市值' : 'Stablecoin MCap', category: 'D', halfLife: 2880,
     evaluate: (d) => {
       if (d.stablecoinMarketCap == null) return null;
       const mcapB = d.stablecoinMarketCap / 1e9;
-      // 阶段2动态: 稳定币市值>170B说明大量资金涌入，<130B说明萎缩
-      if (mcapB > 180) return { triggered: true, impact: 15, confidence: 0.85, summary: `稳定币总市值 $${mcapB.toFixed(0)}B 极高，大量买盘资金储备` };
-      if (mcapB > 160) return { triggered: true, impact: 8, confidence: 0.75, summary: `稳定币总市值 $${mcapB.toFixed(0)}B 偏高，资金充裕` };
-      if (mcapB < 120) return { triggered: true, impact: -12, confidence: 0.8, summary: `稳定币总市值 $${mcapB.toFixed(0)}B 偏低，流动性不足` };
-      if (mcapB < 100) return { triggered: true, impact: -15, confidence: 0.85, summary: `稳定币总市值 $${mcapB.toFixed(0)}B 极低，严重缺乏流动性` };
+      const z = _zh();
+      if (mcapB > 180) return { triggered: true, impact: 15, confidence: 0.85, summary: z ? `稳定币总市值 $${mcapB.toFixed(0)}B 极高，大量买盘资金储备` : `Stablecoin MCap $${mcapB.toFixed(0)}B extremely high, massive buying reserves` };
+      if (mcapB > 160) return { triggered: true, impact: 8, confidence: 0.75, summary: z ? `稳定币总市值 $${mcapB.toFixed(0)}B 偏高，资金充裕` : `Stablecoin MCap $${mcapB.toFixed(0)}B high, ample liquidity` };
+      if (mcapB < 120) return { triggered: true, impact: -12, confidence: 0.8, summary: z ? `稳定币总市值 $${mcapB.toFixed(0)}B 偏低，流动性不足` : `Stablecoin MCap $${mcapB.toFixed(0)}B low, insufficient liquidity` };
+      if (mcapB < 100) return { triggered: true, impact: -15, confidence: 0.85, summary: z ? `稳定币总市值 $${mcapB.toFixed(0)}B 极低，严重缺乏流动性` : `Stablecoin MCap $${mcapB.toFixed(0)}B extremely low, severe liquidity shortage` };
       return null;
     },
   },
@@ -116,10 +118,11 @@ const HARD_SIGNAL_RULES: HardSignalRule[] = [
     evaluate: (d) => {
       if (d.defiTvl == null) return null;
       const tvlB = d.defiTvl / 1e9;
-      if (tvlB > 200) return { triggered: true, impact: 8, confidence: 0.8, summary: `DeFi TVL $${tvlB.toFixed(0)}B 高位，链上生态繁荣` };
-      if (tvlB > 150) return { triggered: true, impact: 4, confidence: 0.7, summary: `DeFi TVL $${tvlB.toFixed(0)}B 健康` };
-      if (tvlB < 50) return { triggered: true, impact: -8, confidence: 0.8, summary: `DeFi TVL $${tvlB.toFixed(0)}B 极低，链上活跃度萎缩` };
-      if (tvlB < 80) return { triggered: true, impact: -4, confidence: 0.7, summary: `DeFi TVL $${tvlB.toFixed(0)}B 偏低` };
+      const z = _zh();
+      if (tvlB > 200) return { triggered: true, impact: 8, confidence: 0.8, summary: z ? `DeFi TVL $${tvlB.toFixed(0)}B 高位，链上生态繁荣` : `DeFi TVL $${tvlB.toFixed(0)}B high, on-chain ecosystem thriving` };
+      if (tvlB > 150) return { triggered: true, impact: 4, confidence: 0.7, summary: z ? `DeFi TVL $${tvlB.toFixed(0)}B 健康` : `DeFi TVL $${tvlB.toFixed(0)}B healthy` };
+      if (tvlB < 50) return { triggered: true, impact: -8, confidence: 0.8, summary: z ? `DeFi TVL $${tvlB.toFixed(0)}B 极低，链上活跃度萎缩` : `DeFi TVL $${tvlB.toFixed(0)}B extremely low, on-chain activity shrinking` };
+      if (tvlB < 80) return { triggered: true, impact: -4, confidence: 0.7, summary: z ? `DeFi TVL $${tvlB.toFixed(0)}B 偏低` : `DeFi TVL $${tvlB.toFixed(0)}B low` };
       return null;
     },
   },
@@ -130,34 +133,35 @@ const HARD_SIGNAL_RULES: HardSignalRule[] = [
 
   // #161 BTC 永续合约资金费率
   {
-    signalId: 161, group: 'G6', name: 'BTC资金费率', category: 'V', halfLife: 120,
+    signalId: 161, group: 'G6', name: _zh() ? 'BTC资金费率' : 'BTC Funding Rate', category: 'V', halfLife: 120,
     evaluate: (d) => {
       if (d.btcFundingRate == null) return null;
       const rate = d.btcFundingRate;
       const pct = (rate * 100).toFixed(4);
-      // 阶段2动态: 5档 impact 根据费率绝对值
-      if (rate > 0.003)  return { triggered: true, impact: -15, confidence: 0.95, summary: `BTC资金费率极端 ${pct}%，多头疯狂杠杆→强回调信号` };
-      if (rate > 0.001)  return { triggered: true, impact: -12, confidence: 0.9, summary: `BTC资金费率极高 ${pct}%，多头过度杠杆` };
-      if (rate > 0.0005) return { triggered: true, impact: -6, confidence: 0.8, summary: `BTC资金费率偏高 ${pct}%，多头情绪过热` };
-      if (rate < -0.003)  return { triggered: true, impact: 15, confidence: 0.95, summary: `BTC资金费率极端负 ${pct}%，历史级恐慌→强反转` };
-      if (rate < -0.001)  return { triggered: true, impact: 12, confidence: 0.9, summary: `BTC资金费率极低 ${pct}%，极度恐慌/反转信号` };
-      if (rate < -0.0005) return { triggered: true, impact: 6, confidence: 0.8, summary: `BTC资金费率为负 ${pct}%，空头占优/潜在反弹` };
+      const z = _zh();
+      if (rate > 0.003)  return { triggered: true, impact: -15, confidence: 0.95, summary: z ? `BTC资金费率极端 ${pct}%，多头疯狂杠杆→强回调信号` : `BTC funding rate extreme ${pct}%, longs over-leveraged → strong pullback signal` };
+      if (rate > 0.001)  return { triggered: true, impact: -12, confidence: 0.9, summary: z ? `BTC资金费率极高 ${pct}%，多头过度杠杆` : `BTC funding rate very high ${pct}%, longs over-leveraged` };
+      if (rate > 0.0005) return { triggered: true, impact: -6, confidence: 0.8, summary: z ? `BTC资金费率偏高 ${pct}%，多头情绪过热` : `BTC funding rate elevated ${pct}%, bullish sentiment overheated` };
+      if (rate < -0.003)  return { triggered: true, impact: 15, confidence: 0.95, summary: z ? `BTC资金费率极端负 ${pct}%，历史级恐慌→强反转` : `BTC funding rate extreme negative ${pct}%, historic panic → strong reversal` };
+      if (rate < -0.001)  return { triggered: true, impact: 12, confidence: 0.9, summary: z ? `BTC资金费率极低 ${pct}%，极度恐慌/反转信号` : `BTC funding rate very low ${pct}%, extreme fear/reversal signal` };
+      if (rate < -0.0005) return { triggered: true, impact: 6, confidence: 0.8, summary: z ? `BTC资金费率为负 ${pct}%，空头占优/潜在反弹` : `BTC funding rate negative ${pct}%, shorts dominant/potential bounce` };
       return null;
     },
   },
   // #162 ETH 永续合约资金费率
   {
-    signalId: 162, group: 'G6', name: 'ETH资金费率', category: 'V', halfLife: 120,
+    signalId: 162, group: 'G6', name: _zh() ? 'ETH资金费率' : 'ETH Funding Rate', category: 'V', halfLife: 120,
     evaluate: (d) => {
       if (d.ethFundingRate == null) return null;
       const rate = d.ethFundingRate;
       const pct = (rate * 100).toFixed(4);
-      if (rate > 0.003)  return { triggered: true, impact: -12, confidence: 0.9, summary: `ETH资金费率极端 ${pct}%` };
-      if (rate > 0.001)  return { triggered: true, impact: -10, confidence: 0.85, summary: `ETH资金费率极高 ${pct}%` };
-      if (rate > 0.0005) return { triggered: true, impact: -5, confidence: 0.75, summary: `ETH资金费率偏高 ${pct}%` };
-      if (rate < -0.003)  return { triggered: true, impact: 12, confidence: 0.9, summary: `ETH资金费率极端负 ${pct}%` };
-      if (rate < -0.001)  return { triggered: true, impact: 10, confidence: 0.85, summary: `ETH资金费率极低 ${pct}%` };
-      if (rate < -0.0005) return { triggered: true, impact: 5, confidence: 0.75, summary: `ETH资金费率为负 ${pct}%` };
+      const z = _zh();
+      if (rate > 0.003)  return { triggered: true, impact: -12, confidence: 0.9, summary: z ? `ETH资金费率极端 ${pct}%` : `ETH funding rate extreme ${pct}%` };
+      if (rate > 0.001)  return { triggered: true, impact: -10, confidence: 0.85, summary: z ? `ETH资金费率极高 ${pct}%` : `ETH funding rate very high ${pct}%` };
+      if (rate > 0.0005) return { triggered: true, impact: -5, confidence: 0.75, summary: z ? `ETH资金费率偏高 ${pct}%` : `ETH funding rate elevated ${pct}%` };
+      if (rate < -0.003)  return { triggered: true, impact: 12, confidence: 0.9, summary: z ? `ETH资金费率极端负 ${pct}%` : `ETH funding rate extreme negative ${pct}%` };
+      if (rate < -0.001)  return { triggered: true, impact: 10, confidence: 0.85, summary: z ? `ETH资金费率极低 ${pct}%` : `ETH funding rate very low ${pct}%` };
+      if (rate < -0.0005) return { triggered: true, impact: 5, confidence: 0.75, summary: z ? `ETH资金费率为负 ${pct}%` : `ETH funding rate negative ${pct}%` };
       return null;
     },
   },
@@ -167,9 +171,10 @@ const HARD_SIGNAL_RULES: HardSignalRule[] = [
     evaluate: (d) => {
       if (d.btcOpenInterest == null) return null;
       const oiB = d.btcOpenInterest / 1e9;
-      if (oiB > 40) return { triggered: true, impact: -10, confidence: 0.85, summary: `BTC OI $${oiB.toFixed(1)}B 极端高位，杠杆泡沫` };
-      if (oiB > 30) return { triggered: true, impact: -6, confidence: 0.75, summary: `BTC OI $${oiB.toFixed(1)}B 高位，杠杆风险` };
-      if (oiB > 22) return { triggered: true, impact: 3, confidence: 0.65, summary: `BTC OI $${oiB.toFixed(1)}B 活跃` };
+      const z = _zh();
+      if (oiB > 40) return { triggered: true, impact: -10, confidence: 0.85, summary: z ? `BTC OI $${oiB.toFixed(1)}B 极端高位，杠杆泡沫` : `BTC OI $${oiB.toFixed(1)}B extreme high, leverage bubble` };
+      if (oiB > 30) return { triggered: true, impact: -6, confidence: 0.75, summary: z ? `BTC OI $${oiB.toFixed(1)}B 高位，杠杆风险` : `BTC OI $${oiB.toFixed(1)}B high, leverage risk` };
+      if (oiB > 22) return { triggered: true, impact: 3, confidence: 0.65, summary: z ? `BTC OI $${oiB.toFixed(1)}B 活跃` : `BTC OI $${oiB.toFixed(1)}B active` };
       return null;
     },
   },
@@ -179,118 +184,125 @@ const HARD_SIGNAL_RULES: HardSignalRule[] = [
     evaluate: (d) => {
       if (d.ethOpenInterest == null) return null;
       const oiB = d.ethOpenInterest / 1e9;
-      if (oiB > 15) return { triggered: true, impact: -8, confidence: 0.8, summary: `ETH OI $${oiB.toFixed(1)}B 极端高位` };
-      if (oiB > 10) return { triggered: true, impact: -4, confidence: 0.7, summary: `ETH OI $${oiB.toFixed(1)}B 偏高` };
+      const z = _zh();
+      if (oiB > 15) return { triggered: true, impact: -8, confidence: 0.8, summary: z ? `ETH OI $${oiB.toFixed(1)}B 极端高位` : `ETH OI $${oiB.toFixed(1)}B extreme high` };
+      if (oiB > 10) return { triggered: true, impact: -4, confidence: 0.7, summary: z ? `ETH OI $${oiB.toFixed(1)}B 偏高` : `ETH OI $${oiB.toFixed(1)}B elevated` };
       return null;
     },
   },
   // #169 BTC 多空比
   {
-    signalId: 169, group: 'G6', name: 'BTC多空比', category: 'D', halfLife: 120,
+    signalId: 169, group: 'G6', name: _zh() ? 'BTC多空比' : 'BTC Long/Short Ratio', category: 'D', halfLife: 120,
     evaluate: (d) => {
       if (d.btcLongShortRatio == null) return null;
       const r = d.btcLongShortRatio;
-      if (r > 3.0) return { triggered: true, impact: -12, confidence: 0.85, summary: `多空比极端偏多 ${r.toFixed(2)}，多头严重拥挤` };
-      if (r > 2.5) return { triggered: true, impact: -8, confidence: 0.8, summary: `多空比极端偏多 ${r.toFixed(2)}，潜在回调` };
-      if (r > 1.8) return { triggered: true, impact: -4, confidence: 0.7, summary: `多空比偏多 ${r.toFixed(2)}` };
-      if (r < 0.35) return { triggered: true, impact: 12, confidence: 0.85, summary: `多空比极端偏空 ${r.toFixed(2)}，空头严重拥挤→反弹` };
-      if (r < 0.5) return { triggered: true, impact: 8, confidence: 0.8, summary: `多空比极端偏空 ${r.toFixed(2)}，潜在反弹` };
-      if (r < 0.7) return { triggered: true, impact: 4, confidence: 0.7, summary: `多空比偏空 ${r.toFixed(2)}` };
+      const z = _zh();
+      if (r > 3.0) return { triggered: true, impact: -12, confidence: 0.85, summary: z ? `多空比极端偏多 ${r.toFixed(2)}，多头严重拥挤` : `L/S ratio extreme long ${r.toFixed(2)}, longs severely crowded` };
+      if (r > 2.5) return { triggered: true, impact: -8, confidence: 0.8, summary: z ? `多空比极端偏多 ${r.toFixed(2)}，潜在回调` : `L/S ratio extreme long ${r.toFixed(2)}, potential pullback` };
+      if (r > 1.8) return { triggered: true, impact: -4, confidence: 0.7, summary: z ? `多空比偏多 ${r.toFixed(2)}` : `L/S ratio long-biased ${r.toFixed(2)}` };
+      if (r < 0.35) return { triggered: true, impact: 12, confidence: 0.85, summary: z ? `多空比极端偏空 ${r.toFixed(2)}，空头严重拥挤→反弹` : `L/S ratio extreme short ${r.toFixed(2)}, shorts crowded → bounce` };
+      if (r < 0.5) return { triggered: true, impact: 8, confidence: 0.8, summary: z ? `多空比极端偏空 ${r.toFixed(2)}，潜在反弹` : `L/S ratio extreme short ${r.toFixed(2)}, potential bounce` };
+      if (r < 0.7) return { triggered: true, impact: 4, confidence: 0.7, summary: z ? `多空比偏空 ${r.toFixed(2)}` : `L/S ratio short-biased ${r.toFixed(2)}` };
       return null;
     },
   },
   // #174 BTC盘口 买±1%深度
   {
-    signalId: 174, group: 'G6', name: 'BTC买盘深度', category: 'D', halfLife: 60,
+    signalId: 174, group: 'G6', name: _zh() ? 'BTC买盘深度' : 'BTC Bid Depth', category: 'D', halfLife: 60,
     evaluate: (d) => {
       if (d.btcBidDepth == null || d.btcAskDepth == null) return null;
       const ratio = d.btcBidDepth / (d.btcAskDepth || 1);
-      if (ratio > 3.0) return { triggered: true, impact: 15, confidence: 0.9, summary: `买盘深度极强 (${ratio.toFixed(1)}x卖盘)，强力支撑` };
-      if (ratio > 2.0) return { triggered: true, impact: 10, confidence: 0.85, summary: `买盘深度远超卖盘 (${ratio.toFixed(1)}x)` };
-      if (ratio > 1.5) return { triggered: true, impact: 5, confidence: 0.75, summary: `买盘深度优于卖盘 (${ratio.toFixed(1)}x)` };
-      if (ratio < 0.33) return { triggered: true, impact: -15, confidence: 0.9, summary: `买盘极薄 (买/卖=${ratio.toFixed(2)})，卖压极重` };
-      if (ratio < 0.5) return { triggered: true, impact: -10, confidence: 0.85, summary: `卖盘远超买盘 (买/卖=${ratio.toFixed(2)})` };
-      if (ratio < 0.7) return { triggered: true, impact: -5, confidence: 0.75, summary: `卖盘强于买盘 (买/卖=${ratio.toFixed(2)})` };
+      const z = _zh();
+      if (ratio > 3.0) return { triggered: true, impact: 15, confidence: 0.9, summary: z ? `买盘深度极强 (${ratio.toFixed(1)}x卖盘)，强力支撑` : `Bid depth extremely strong (${ratio.toFixed(1)}x asks), strong support` };
+      if (ratio > 2.0) return { triggered: true, impact: 10, confidence: 0.85, summary: z ? `买盘深度远超卖盘 (${ratio.toFixed(1)}x)` : `Bid depth far exceeds asks (${ratio.toFixed(1)}x)` };
+      if (ratio > 1.5) return { triggered: true, impact: 5, confidence: 0.75, summary: z ? `买盘深度优于卖盘 (${ratio.toFixed(1)}x)` : `Bid depth exceeds asks (${ratio.toFixed(1)}x)` };
+      if (ratio < 0.33) return { triggered: true, impact: -15, confidence: 0.9, summary: z ? `买盘极薄 (买/卖=${ratio.toFixed(2)})，卖压极重` : `Bids extremely thin (bid/ask=${ratio.toFixed(2)}), extreme sell pressure` };
+      if (ratio < 0.5) return { triggered: true, impact: -10, confidence: 0.85, summary: z ? `卖盘远超买盘 (买/卖=${ratio.toFixed(2)})` : `Asks far exceed bids (bid/ask=${ratio.toFixed(2)})` };
+      if (ratio < 0.7) return { triggered: true, impact: -5, confidence: 0.75, summary: z ? `卖盘强于买盘 (买/卖=${ratio.toFixed(2)})` : `Asks stronger than bids (bid/ask=${ratio.toFixed(2)})` };
       return null;
     },
   },
   // #175 BTC盘口 卖±1%深度
   {
-    signalId: 175, group: 'G6', name: 'BTC卖盘深度', category: 'D', halfLife: 60,
+    signalId: 175, group: 'G6', name: _zh() ? 'BTC卖盘深度' : 'BTC Ask Depth', category: 'D', halfLife: 60,
     evaluate: (d) => {
       if (d.btcBidDepth == null || d.btcAskDepth == null) return null;
       const ratio = d.btcAskDepth / (d.btcBidDepth || 1);
-      if (ratio > 3.0) return { triggered: true, impact: -12, confidence: 0.9, summary: `卖盘极厚 (${ratio.toFixed(1)}x买盘)，上方阻力极大` };
-      if (ratio > 2.0) return { triggered: true, impact: -8, confidence: 0.85, summary: `卖盘远超买盘 (${ratio.toFixed(1)}x)` };
-      if (ratio < 0.33) return { triggered: true, impact: 12, confidence: 0.9, summary: `卖盘极薄 (卖/买=${ratio.toFixed(2)})，上方无阻力` };
-      if (ratio < 0.5) return { triggered: true, impact: 8, confidence: 0.85, summary: `卖盘薄弱 (卖/买=${ratio.toFixed(2)})` };
+      const z = _zh();
+      if (ratio > 3.0) return { triggered: true, impact: -12, confidence: 0.9, summary: z ? `卖盘极厚 (${ratio.toFixed(1)}x买盘)，上方阻力极大` : `Asks extremely thick (${ratio.toFixed(1)}x bids), massive overhead resistance` };
+      if (ratio > 2.0) return { triggered: true, impact: -8, confidence: 0.85, summary: z ? `卖盘远超买盘 (${ratio.toFixed(1)}x)` : `Asks far exceed bids (${ratio.toFixed(1)}x)` };
+      if (ratio < 0.33) return { triggered: true, impact: 12, confidence: 0.9, summary: z ? `卖盘极薄 (卖/买=${ratio.toFixed(2)})，上方无阻力` : `Asks extremely thin (ask/bid=${ratio.toFixed(2)}), no overhead resistance` };
+      if (ratio < 0.5) return { triggered: true, impact: 8, confidence: 0.85, summary: z ? `卖盘薄弱 (卖/买=${ratio.toFixed(2)})` : `Asks weak (ask/bid=${ratio.toFixed(2)})` };
       return null;
     },
   },
   // #177 交易量突增 (BTC 24h涨跌幅异常 → 波动信号)
   {
-    signalId: 177, group: 'G6', name: '价格异常波动', category: 'V', halfLife: 120,
+    signalId: 177, group: 'G6', name: _zh() ? '价格异常波动' : 'Price Abnormal Volatility', category: 'V', halfLife: 120,
     evaluate: (d) => {
       if (d.btcPriceChangePercent24h == null) return null;
       const pct = Math.abs(d.btcPriceChangePercent24h);
-      if (pct > 15) return { triggered: true, impact: 10, confidence: 0.9, summary: `BTC 24h波动 ${d.btcPriceChangePercent24h!.toFixed(1)}%，极端异常` };
-      if (pct > 10) return { triggered: true, impact: 8, confidence: 0.85, summary: `BTC 24h波动 ${d.btcPriceChangePercent24h!.toFixed(1)}%，剧烈波动` };
-      if (pct > 5) return { triggered: true, impact: 5, confidence: 0.75, summary: `BTC 24h波动 ${d.btcPriceChangePercent24h!.toFixed(1)}%，显著波动` };
+      const z = _zh();
+      if (pct > 15) return { triggered: true, impact: 10, confidence: 0.9, summary: z ? `BTC 24h波动 ${d.btcPriceChangePercent24h!.toFixed(1)}%，极端异常` : `BTC 24h change ${d.btcPriceChangePercent24h!.toFixed(1)}%, extreme abnormal` };
+      if (pct > 10) return { triggered: true, impact: 8, confidence: 0.85, summary: z ? `BTC 24h波动 ${d.btcPriceChangePercent24h!.toFixed(1)}%，剧烈波动` : `BTC 24h change ${d.btcPriceChangePercent24h!.toFixed(1)}%, violent volatility` };
+      if (pct > 5) return { triggered: true, impact: 5, confidence: 0.75, summary: z ? `BTC 24h波动 ${d.btcPriceChangePercent24h!.toFixed(1)}%，显著波动` : `BTC 24h change ${d.btcPriceChangePercent24h!.toFixed(1)}%, significant volatility` };
       return null;
     },
   },
   // #178 Binance BTC/USDT 现货深度 (用总深度绝对值)
   {
-    signalId: 178, group: 'G6', name: 'Binance现货深度', category: 'D', halfLife: 120,
+    signalId: 178, group: 'G6', name: _zh() ? 'Binance现货深度' : 'Binance Spot Depth', category: 'D', halfLife: 120,
     evaluate: (d) => {
       if (d.btcBidDepth == null || d.btcAskDepth == null) return null;
       const totalDepthM = (d.btcBidDepth + d.btcAskDepth) / 1e6;
-      // 深度极低 → 流动性枯竭 → 大波动风险
-      if (totalDepthM < 10) return { triggered: true, impact: -8, confidence: 0.8, summary: `±1%深度仅 $${totalDepthM.toFixed(0)}M，流动性极差` };
-      if (totalDepthM < 30) return { triggered: true, impact: -3, confidence: 0.7, summary: `±1%深度 $${totalDepthM.toFixed(0)}M，流动性偏低` };
-      if (totalDepthM > 150) return { triggered: true, impact: 5, confidence: 0.75, summary: `±1%深度 $${totalDepthM.toFixed(0)}M，流动性充裕` };
+      const z = _zh();
+      if (totalDepthM < 10) return { triggered: true, impact: -8, confidence: 0.8, summary: z ? `±1%深度仅 $${totalDepthM.toFixed(0)}M，流动性极差` : `±1% depth only $${totalDepthM.toFixed(0)}M, extremely poor liquidity` };
+      if (totalDepthM < 30) return { triggered: true, impact: -3, confidence: 0.7, summary: z ? `±1%深度 $${totalDepthM.toFixed(0)}M，流动性偏低` : `±1% depth $${totalDepthM.toFixed(0)}M, low liquidity` };
+      if (totalDepthM > 150) return { triggered: true, impact: 5, confidence: 0.75, summary: z ? `±1%深度 $${totalDepthM.toFixed(0)}M，流动性充裕` : `±1% depth $${totalDepthM.toFixed(0)}M, ample liquidity` };
       return null;
     },
   },
   // #185 BTC 现货成交量/OI比率
   {
-    signalId: 185, group: 'G6', name: '现货/OI比', category: 'V', halfLife: 360,
+    signalId: 185, group: 'G6', name: _zh() ? '现货/OI比' : 'Spot/OI Ratio', category: 'V', halfLife: 360,
     evaluate: (d) => {
       if (d.btcSpotVolumeToOI == null) return null;
       const ratio = d.btcSpotVolumeToOI;
-      // 比率极低 = 杠杆过高 → 危险
-      if (ratio < 0.3) return { triggered: true, impact: -8, confidence: 0.8, summary: `现货/OI比 ${ratio.toFixed(2)} 极低，杠杆远超现货→爆仓风险` };
-      if (ratio < 0.5) return { triggered: true, impact: -4, confidence: 0.7, summary: `现货/OI比 ${ratio.toFixed(2)} 偏低，杠杆偏高` };
-      if (ratio > 2.0) return { triggered: true, impact: 5, confidence: 0.7, summary: `现货/OI比 ${ratio.toFixed(2)} 高，现货主导/健康` };
+      const z = _zh();
+      if (ratio < 0.3) return { triggered: true, impact: -8, confidence: 0.8, summary: z ? `现货/OI比 ${ratio.toFixed(2)} 极低，杠杆远超现货→爆仓风险` : `Spot/OI ratio ${ratio.toFixed(2)} extremely low, leverage far exceeds spot → liquidation risk` };
+      if (ratio < 0.5) return { triggered: true, impact: -4, confidence: 0.7, summary: z ? `现货/OI比 ${ratio.toFixed(2)} 偏低，杠杆偏高` : `Spot/OI ratio ${ratio.toFixed(2)} low, leverage elevated` };
+      if (ratio > 2.0) return { triggered: true, impact: 5, confidence: 0.7, summary: z ? `现货/OI比 ${ratio.toFixed(2)} 高，现货主导/健康` : `Spot/OI ratio ${ratio.toFixed(2)} high, spot-driven/healthy` };
       return null;
     },
   },
   // #187 全网杠杆率
   {
-    signalId: 187, group: 'G6', name: '估算杠杆率', category: 'R', halfLife: 360,
+    signalId: 187, group: 'G6', name: _zh() ? '估算杠杆率' : 'Est. Leverage Ratio', category: 'R', halfLife: 360,
     evaluate: (d) => {
       if (d.btcOpenInterest == null || d.btcPrice == null) return null;
       const marketCap = d.btcPrice * 19_500_000;
       const lev = d.btcOpenInterest / marketCap;
       const pct = (lev * 100).toFixed(1);
-      if (lev > 0.45) return { triggered: true, impact: -12, confidence: 0.9, summary: `杠杆率 ${pct}% 极端，系统性爆仓风险` };
-      if (lev > 0.35) return { triggered: true, impact: -8, confidence: 0.85, summary: `杠杆率 ${pct}% 极高，爆仓风险显著` };
-      if (lev > 0.25) return { triggered: true, impact: -4, confidence: 0.75, summary: `杠杆率 ${pct}% 偏高` };
+      const z = _zh();
+      if (lev > 0.45) return { triggered: true, impact: -12, confidence: 0.9, summary: z ? `杠杆率 ${pct}% 极端，系统性爆仓风险` : `Leverage ratio ${pct}% extreme, systemic liquidation risk` };
+      if (lev > 0.35) return { triggered: true, impact: -8, confidence: 0.85, summary: z ? `杠杆率 ${pct}% 极高，爆仓风险显著` : `Leverage ratio ${pct}% very high, significant liquidation risk` };
+      if (lev > 0.25) return { triggered: true, impact: -4, confidence: 0.75, summary: z ? `杠杆率 ${pct}% 偏高` : `Leverage ratio ${pct}% elevated` };
       return null;
     },
   },
   // #188 Taker Buy/Sell Volume比
   {
-    signalId: 188, group: 'G6', name: '主买/主卖比', category: 'D', halfLife: 120,
+    signalId: 188, group: 'G6', name: _zh() ? '主买/主卖比' : 'Taker Buy/Sell Ratio', category: 'D', halfLife: 120,
     evaluate: (d) => {
       if (d.btcTakerRatio == null) return null;
       const r = d.btcTakerRatio;
-      if (r > 1.5) return { triggered: true, impact: 10, confidence: 0.85, summary: `Taker主买极强 (${r.toFixed(2)})，买方碾压` };
-      if (r > 1.3) return { triggered: true, impact: 7, confidence: 0.8, summary: `Taker主买远强于主卖 (${r.toFixed(2)})` };
-      if (r > 1.1) return { triggered: true, impact: 3, confidence: 0.7, summary: `Taker偏向主买 (${r.toFixed(2)})` };
-      if (r < 0.65) return { triggered: true, impact: -10, confidence: 0.85, summary: `Taker主卖极强 (${r.toFixed(2)})，卖方碾压` };
-      if (r < 0.75) return { triggered: true, impact: -7, confidence: 0.8, summary: `Taker主卖远强于主买 (${r.toFixed(2)})` };
-      if (r < 0.9) return { triggered: true, impact: -3, confidence: 0.7, summary: `Taker偏向主卖 (${r.toFixed(2)})` };
+      const z = _zh();
+      if (r > 1.5) return { triggered: true, impact: 10, confidence: 0.85, summary: z ? `Taker主买极强 (${r.toFixed(2)})，买方碾压` : `Taker buy extremely strong (${r.toFixed(2)}), buyers dominating` };
+      if (r > 1.3) return { triggered: true, impact: 7, confidence: 0.8, summary: z ? `Taker主买远强于主卖 (${r.toFixed(2)})` : `Taker buy far exceeds sell (${r.toFixed(2)})` };
+      if (r > 1.1) return { triggered: true, impact: 3, confidence: 0.7, summary: z ? `Taker偏向主买 (${r.toFixed(2)})` : `Taker leaning buy (${r.toFixed(2)})` };
+      if (r < 0.65) return { triggered: true, impact: -10, confidence: 0.85, summary: z ? `Taker主卖极强 (${r.toFixed(2)})，卖方碾压` : `Taker sell extremely strong (${r.toFixed(2)}), sellers dominating` };
+      if (r < 0.75) return { triggered: true, impact: -7, confidence: 0.8, summary: z ? `Taker主卖远强于主买 (${r.toFixed(2)})` : `Taker sell far exceeds buy (${r.toFixed(2)})` };
+      if (r < 0.9) return { triggered: true, impact: -3, confidence: 0.7, summary: z ? `Taker偏向主卖 (${r.toFixed(2)})` : `Taker leaning sell (${r.toFixed(2)})` };
       return null;
     },
   },
@@ -301,61 +313,61 @@ const HARD_SIGNAL_RULES: HardSignalRule[] = [
 
   // #191 Crypto Fear & Greed Index
   {
-    signalId: 191, group: 'G7', name: '恐惧贪婪指数', category: 'D', halfLife: 1440,
+    signalId: 191, group: 'G7', name: _zh() ? '恐惧贪婪指数' : 'Fear & Greed Index', category: 'D', halfLife: 1440,
     evaluate: (d) => {
       if (d.fearGreedIndex == null) return null;
       const v = d.fearGreedIndex;
-      // 阶段2动态: 7档
-      if (v <= 5)  return { triggered: true, impact: 12, confidence: 0.95, summary: `恐慌贪婪指数 ${v} (历史极端恐惧)，极强反转信号` };
-      if (v <= 10) return { triggered: true, impact: 10, confidence: 0.9, summary: `恐慌贪婪指数 ${v} (极度恐惧)，强反转信号` };
-      if (v <= 20) return { triggered: true, impact: 7, confidence: 0.85, summary: `恐慌贪婪指数 ${v} (恐惧)，潜在买入机会` };
-      if (v <= 30) return { triggered: true, impact: 4, confidence: 0.75, summary: `恐慌贪婪指数 ${v} (偏恐惧)，情绪低迷` };
-      if (v >= 95) return { triggered: true, impact: -12, confidence: 0.95, summary: `恐慌贪婪指数 ${v} (历史极端贪婪)，极强回调信号` };
-      if (v >= 85) return { triggered: true, impact: -10, confidence: 0.9, summary: `恐慌贪婪指数 ${v} (极度贪婪)，过热→强回调` };
-      if (v >= 75) return { triggered: true, impact: -6, confidence: 0.85, summary: `恐慌贪婪指数 ${v} (贪婪)，注意风险` };
-      if (v >= 65) return { triggered: true, impact: -3, confidence: 0.7, summary: `恐慌贪婪指数 ${v} (偏贪婪)，情绪偏热` };
-      return null; // 30-65 中性区间不触发
+      const z = _zh();
+      if (v <= 5)  return { triggered: true, impact: 12, confidence: 0.95, summary: z ? `恐慌贪婪指数 ${v} (历史极端恐惧)，极强反转信号` : `Fear & Greed ${v} (historic extreme fear), very strong reversal signal` };
+      if (v <= 10) return { triggered: true, impact: 10, confidence: 0.9, summary: z ? `恐慌贪婪指数 ${v} (极度恐惧)，强反转信号` : `Fear & Greed ${v} (extreme fear), strong reversal signal` };
+      if (v <= 20) return { triggered: true, impact: 7, confidence: 0.85, summary: z ? `恐慌贪婪指数 ${v} (恐惧)，潜在买入机会` : `Fear & Greed ${v} (fear), potential buying opportunity` };
+      if (v <= 30) return { triggered: true, impact: 4, confidence: 0.75, summary: z ? `恐慌贪婪指数 ${v} (偏恐惧)，情绪低迷` : `Fear & Greed ${v} (somewhat fearful), sentiment low` };
+      if (v >= 95) return { triggered: true, impact: -12, confidence: 0.95, summary: z ? `恐慌贪婪指数 ${v} (历史极端贪婪)，极强回调信号` : `Fear & Greed ${v} (historic extreme greed), very strong pullback signal` };
+      if (v >= 85) return { triggered: true, impact: -10, confidence: 0.9, summary: z ? `恐慌贪婪指数 ${v} (极度贪婪)，过热→强回调` : `Fear & Greed ${v} (extreme greed), overheated → strong pullback` };
+      if (v >= 75) return { triggered: true, impact: -6, confidence: 0.85, summary: z ? `恐慌贪婪指数 ${v} (贪婪)，注意风险` : `Fear & Greed ${v} (greed), watch for risk` };
+      if (v >= 65) return { triggered: true, impact: -3, confidence: 0.7, summary: z ? `恐慌贪婪指数 ${v} (偏贪婪)，情绪偏热` : `Fear & Greed ${v} (somewhat greedy), sentiment warming` };
+      return null;
     },
   },
   // #203 山寨币季节指数 (用 BTC Dominance 反推)
   {
-    signalId: 203, group: 'G7', name: '山寨币季节', category: 'D', halfLife: 1440,
+    signalId: 203, group: 'G7', name: _zh() ? '山寨币季节' : 'Altcoin Season', category: 'D', halfLife: 1440,
     evaluate: (d) => {
       if (d.btcDominance == null) return null;
       const dom = d.btcDominance;
-      // BTC占比 < 45% 视为山寨季，> 60% 视为BTC主导
-      if (dom < 38) return { triggered: true, impact: 8, confidence: 0.8, summary: `BTC占比仅 ${dom.toFixed(1)}%，深度山寨季/资金轮动强烈` };
-      if (dom < 45) return { triggered: true, impact: 5, confidence: 0.7, summary: `BTC占比 ${dom.toFixed(1)}%，偏向山寨季` };
-      if (dom > 70) return { triggered: true, impact: -6, confidence: 0.8, summary: `BTC占比 ${dom.toFixed(1)}%，极端BTC主导/避险模式` };
-      if (dom > 60) return { triggered: true, impact: -3, confidence: 0.7, summary: `BTC占比 ${dom.toFixed(1)}%，BTC主导` };
+      const z = _zh();
+      if (dom < 38) return { triggered: true, impact: 8, confidence: 0.8, summary: z ? `BTC占比仅 ${dom.toFixed(1)}%，深度山寨季/资金轮动强烈` : `BTC dominance only ${dom.toFixed(1)}%, deep altcoin season/strong capital rotation` };
+      if (dom < 45) return { triggered: true, impact: 5, confidence: 0.7, summary: z ? `BTC占比 ${dom.toFixed(1)}%，偏向山寨季` : `BTC dominance ${dom.toFixed(1)}%, leaning altcoin season` };
+      if (dom > 70) return { triggered: true, impact: -6, confidence: 0.8, summary: z ? `BTC占比 ${dom.toFixed(1)}%，极端BTC主导/避险模式` : `BTC dominance ${dom.toFixed(1)}%, extreme BTC dominance/risk-off` };
+      if (dom > 60) return { triggered: true, impact: -3, confidence: 0.7, summary: z ? `BTC占比 ${dom.toFixed(1)}%，BTC主导` : `BTC dominance ${dom.toFixed(1)}%, BTC dominant` };
       return null;
     },
   },
   // #204 BTC Dominance 变化
   {
-    signalId: 204, group: 'G7', name: 'BTC占比', category: 'D', halfLife: 720,
+    signalId: 204, group: 'G7', name: _zh() ? 'BTC占比' : 'BTC Dominance', category: 'D', halfLife: 720,
     evaluate: (d) => {
       if (d.btcDominance == null) return null;
       const dom = d.btcDominance;
-      if (dom > 68) return { triggered: true, impact: -8, confidence: 0.85, summary: `BTC占比 ${dom.toFixed(1)}% 极端高位，避险情绪极强` };
-      if (dom > 60) return { triggered: true, impact: -5, confidence: 0.8, summary: `BTC占比 ${dom.toFixed(1)}% 高位，避险情绪强` };
-      if (dom > 55) return { triggered: true, impact: -2, confidence: 0.7, summary: `BTC占比 ${dom.toFixed(1)}% 偏高` };
-      if (dom < 35) return { triggered: true, impact: 8, confidence: 0.85, summary: `BTC占比 ${dom.toFixed(1)}% 极低，山寨季/极强风险偏好` };
-      if (dom < 42) return { triggered: true, impact: 5, confidence: 0.8, summary: `BTC占比 ${dom.toFixed(1)}% 低位，风险偏好强` };
-      if (dom < 48) return { triggered: true, impact: 2, confidence: 0.7, summary: `BTC占比 ${dom.toFixed(1)}% 偏低` };
+      const z = _zh();
+      if (dom > 68) return { triggered: true, impact: -8, confidence: 0.85, summary: z ? `BTC占比 ${dom.toFixed(1)}% 极端高位，避险情绪极强` : `BTC dominance ${dom.toFixed(1)}% extreme high, very strong risk-off sentiment` };
+      if (dom > 60) return { triggered: true, impact: -5, confidence: 0.8, summary: z ? `BTC占比 ${dom.toFixed(1)}% 高位，避险情绪强` : `BTC dominance ${dom.toFixed(1)}% high, strong risk-off sentiment` };
+      if (dom > 55) return { triggered: true, impact: -2, confidence: 0.7, summary: z ? `BTC占比 ${dom.toFixed(1)}% 偏高` : `BTC dominance ${dom.toFixed(1)}% elevated` };
+      if (dom < 35) return { triggered: true, impact: 8, confidence: 0.85, summary: z ? `BTC占比 ${dom.toFixed(1)}% 极低，山寨季/极强风险偏好` : `BTC dominance ${dom.toFixed(1)}% extremely low, altseason/strong risk-on` };
+      if (dom < 42) return { triggered: true, impact: 5, confidence: 0.8, summary: z ? `BTC占比 ${dom.toFixed(1)}% 低位，风险偏好强` : `BTC dominance ${dom.toFixed(1)}% low, strong risk-on` };
+      if (dom < 48) return { triggered: true, impact: 2, confidence: 0.7, summary: z ? `BTC占比 ${dom.toFixed(1)}% 偏低` : `BTC dominance ${dom.toFixed(1)}% low-ish` };
       return null;
     },
   },
   // #212 Binance 合约多空账户比 (复用 Long/Short Ratio 数据)
   {
-    signalId: 212, group: 'G7', name: '合约多空账户比', category: 'D', halfLife: 360,
+    signalId: 212, group: 'G7', name: _zh() ? '合约多空账户比' : 'Futures L/S Account Ratio', category: 'D', halfLife: 360,
     evaluate: (d) => {
       if (d.btcLongShortRatio == null) return null;
       const r = d.btcLongShortRatio;
-      // 极端偏空 → 反转信号(散户看空，反向操作)
-      if (r < 0.4) return { triggered: true, impact: 6, confidence: 0.75, summary: `账户多空比极端偏空 ${r.toFixed(2)}，散户看空→潜在反转` };
-      // 极端偏多 → 散户FOMO
-      if (r > 3.0) return { triggered: true, impact: -6, confidence: 0.75, summary: `账户多空比极端偏多 ${r.toFixed(2)}，散户FOMO→见顶风险` };
+      const z = _zh();
+      if (r < 0.4) return { triggered: true, impact: 6, confidence: 0.75, summary: z ? `账户多空比极端偏空 ${r.toFixed(2)}，散户看空→潜在反转` : `Account L/S ratio extreme short ${r.toFixed(2)}, retail bearish → potential reversal` };
+      if (r > 3.0) return { triggered: true, impact: -6, confidence: 0.75, summary: z ? `账户多空比极端偏多 ${r.toFixed(2)}，散户FOMO→见顶风险` : `Account L/S ratio extreme long ${r.toFixed(2)}, retail FOMO → top risk` };
       return null;
     },
   },
@@ -665,7 +677,8 @@ export async function collectAndEvaluateHardSignals(): Promise<{
  * 格式化硬数据为简报补充文本
  */
 export function formatHardDataSummary(data: HardMarketData): string {
-  const lines: string[] = ['## 📡 实时硬数据 (API直连)'];
+  const z = _zh();
+  const lines: string[] = [z ? '## 📡 实时硬数据 (API直连)' : '## 📡 Real-time Hard Data (API Direct)'];
 
   if (data.btcPrice != null) {
     lines.push(`BTC: $${data.btcPrice.toLocaleString()}${data.btcPriceChangePercent24h != null ? ` (${data.btcPriceChangePercent24h > 0 ? '+' : ''}${data.btcPriceChangePercent24h.toFixed(1)}% 24h)` : ''}`);
@@ -674,10 +687,10 @@ export function formatHardDataSummary(data: HardMarketData): string {
     lines.push(`ETH: $${data.ethPrice.toLocaleString()}`);
   }
   if (data.btcFundingRate != null) {
-    lines.push(`BTC资金费率: ${(data.btcFundingRate * 100).toFixed(4)}%`);
+    lines.push(`${z ? 'BTC资金费率' : 'BTC Funding Rate'}: ${(data.btcFundingRate * 100).toFixed(4)}%`);
   }
   if (data.ethFundingRate != null) {
-    lines.push(`ETH资金费率: ${(data.ethFundingRate * 100).toFixed(4)}%`);
+    lines.push(`${z ? 'ETH资金费率' : 'ETH Funding Rate'}: ${(data.ethFundingRate * 100).toFixed(4)}%`);
   }
   if (data.btcOpenInterest != null) {
     lines.push(`BTC OI: $${(data.btcOpenInterest / 1e9).toFixed(2)}B`);
@@ -686,31 +699,33 @@ export function formatHardDataSummary(data: HardMarketData): string {
     lines.push(`ETH OI: $${(data.ethOpenInterest / 1e9).toFixed(2)}B`);
   }
   if (data.btcLongShortRatio != null) {
-    lines.push(`BTC多空比: ${data.btcLongShortRatio.toFixed(2)}`);
+    lines.push(`${z ? 'BTC多空比' : 'BTC L/S Ratio'}: ${data.btcLongShortRatio.toFixed(2)}`);
   }
   if (data.btcTakerRatio != null) {
-    lines.push(`Taker买卖比: ${data.btcTakerRatio.toFixed(2)}`);
+    lines.push(`${z ? 'Taker买卖比' : 'Taker B/S Ratio'}: ${data.btcTakerRatio.toFixed(2)}`);
   }
   if (data.btcBidDepth != null && data.btcAskDepth != null) {
-    lines.push(`盘口深度 (±1%): 买 $${(data.btcBidDepth / 1e6).toFixed(1)}M / 卖 $${(data.btcAskDepth / 1e6).toFixed(1)}M`);
+    lines.push(z
+      ? `盘口深度 (±1%): 买 $${(data.btcBidDepth / 1e6).toFixed(1)}M / 卖 $${(data.btcAskDepth / 1e6).toFixed(1)}M`
+      : `Order Book (±1%): Bid $${(data.btcBidDepth / 1e6).toFixed(1)}M / Ask $${(data.btcAskDepth / 1e6).toFixed(1)}M`);
   }
   if (data.btcSpotVolumeToOI != null) {
-    lines.push(`现货/OI比: ${data.btcSpotVolumeToOI.toFixed(2)}`);
+    lines.push(`${z ? '现货/OI比' : 'Spot/OI Ratio'}: ${data.btcSpotVolumeToOI.toFixed(2)}`);
   }
   if (data.fearGreedIndex != null) {
-    lines.push(`恐慌贪婪指数: ${data.fearGreedIndex} (${data.fearGreedClass})`);
+    lines.push(`${z ? '恐慌贪婪指数' : 'Fear & Greed'}: ${data.fearGreedIndex} (${data.fearGreedClass})`);
   }
   if (data.btcDominance != null) {
-    lines.push(`BTC市值占比: ${data.btcDominance.toFixed(1)}%`);
+    lines.push(`${z ? 'BTC市值占比' : 'BTC Dominance'}: ${data.btcDominance.toFixed(1)}%`);
   }
   if (data.stablecoinMarketCap != null) {
-    lines.push(`稳定币总市值: $${(data.stablecoinMarketCap / 1e9).toFixed(0)}B`);
+    lines.push(`${z ? '稳定币总市值' : 'Stablecoin MCap'}: $${(data.stablecoinMarketCap / 1e9).toFixed(0)}B`);
   }
   if (data.defiTvl != null) {
     lines.push(`DeFi TVL: $${(data.defiTvl / 1e9).toFixed(0)}B`);
   }
   if (data.totalMarketCap != null) {
-    lines.push(`加密总市值: $${(data.totalMarketCap / 1e12).toFixed(2)}T`);
+    lines.push(`${z ? '加密总市值' : 'Total Crypto MCap'}: $${(data.totalMarketCap / 1e12).toFixed(2)}T`);
   }
 
   return lines.join('\n');
