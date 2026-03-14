@@ -967,7 +967,48 @@
       "error": "Error",
       "testScanPush": "Test Push Last Scan Result",
       "scanPushSuccess": "Last scan result pushed to {{channels}}",
-      "pushFailed": "Push failed"
+      "pushFailed": "Push failed",
+      "setupGuide": "📖 Setup Guide",
+      "telegramGuide": {
+        "title": "Telegram Bot Setup Guide",
+        "subtitle": "Follow these steps to create a Telegram Bot and get your Chat ID. It only takes about 2 minutes.",
+        "part1Title": "Part 1: Create a Telegram Bot",
+        "step1": "Open Telegram and search for <b>@BotFather</b> in the search bar (it has a blue verified checkmark ✓)",
+        "step2": "Click <b>Start</b> or send <b>/start</b> to begin a conversation with BotFather",
+        "step3": "Send the command <b>/newbot</b> to create a new bot",
+        "step4": "BotFather will ask you to choose a <b>display name</b> for your bot — enter any name you like, e.g. <code>My Alert Bot</code>",
+        "step5": "Next, choose a <b>username</b> for your bot — it must end with <code>bot</code>, e.g. <code>myalerts_sentinel_bot</code>",
+        "step6": "BotFather will reply with your <b>Bot Token</b>, which looks like: <code>7123456789:AAHxxxxxxxxxxxxxxxxxxxxxx</code>",
+        "step6note": "⚠️ Keep this token secret! Anyone with this token can control your bot.",
+        "step7": "Copy this token and paste it into the <b>Bot Token</b> field above",
+        "part2Title": "Part 2: Get Your Chat ID",
+        "step8": "Search for your newly created bot in Telegram (use the username you chose) and click <b>Start</b>",
+        "step9": "Now search for <b>@userinfobot</b> in Telegram and click <b>Start</b> (or send <b>/start</b>)",
+        "step10": "It will immediately reply with your user information, including your <b>Chat ID</b> — a number like <code>123456789</code>",
+        "step11": "Copy this number and paste it into the <b>Chat ID</b> field above",
+        "groupNote": "💡 <b>Want to send to a Group instead?</b> Add your bot to the group, then send any message in the group. Visit <code>https://api.telegram.org/bot&lt;YOUR_TOKEN&gt;/getUpdates</code> in a browser to find the group Chat ID (it will be a negative number like <code>-1001234567890</code>).",
+        "done": "✅ All done! Click the <b>Test</b> button to verify your setup. You should receive a test message in Telegram."
+      },
+      "whatsappGuide": {
+        "title": "WhatsApp Business API Setup Guide",
+        "subtitle": "WhatsApp push notifications require a Meta Business account. Follow these steps to set it up.",
+        "part1Title": "Part 1: Create a Meta Developer App",
+        "step1": "Go to <a href='https://developers.facebook.com' target='_blank' class='text-cyan-400 underline'>developers.facebook.com</a> and log in with your Facebook account",
+        "step2": "Click <b>My Apps</b> → <b>Create App</b>",
+        "step3": "Select app type <b>Business</b>, then fill in your app name and click <b>Create</b>",
+        "step4": "In your app dashboard, find <b>WhatsApp</b> and click <b>Set Up</b>",
+        "part2Title": "Part 2: Get API Credentials",
+        "step5": "In the WhatsApp section, go to <b>API Setup</b>",
+        "step6": "You'll see a <b>Temporary Access Token</b> — copy this as your <b>API Key / Token</b>",
+        "step6note": "⚠️ Temporary tokens expire in 24 hours. For production use, generate a permanent token in <b>System Users</b> settings.",
+        "step7": "The <b>Phone Number ID</b> is shown on the same page. Your API URL will be: <code>https://graph.facebook.com/v18.0/PHONE_NUMBER_ID/messages</code>",
+        "step8": "Replace <code>PHONE_NUMBER_ID</code> in the URL with your actual Phone Number ID and paste into the <b>API URL</b> field",
+        "part3Title": "Part 3: Configure Recipient",
+        "step9": "Under <b>API Setup</b>, add your phone number as a <b>test recipient</b> and verify it with the SMS code",
+        "step10": "Enter the recipient's phone number in the <b>Phone Number</b> field above (include country code, e.g. <code>+1 2345678900</code>)",
+        "permanentNote": "💡 <b>For production use:</b> To send messages beyond the test period, you need to register a <b>WhatsApp Business Phone Number</b>, submit your app for <b>Business Verification</b>, and generate a <b>Permanent System User Token</b> in Meta Business Settings.",
+        "done": "✅ All set! Click <b>Test</b> to send a test message. Check your WhatsApp for the notification."
+      }
     }
   }
 }

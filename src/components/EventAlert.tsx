@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Bell, BellRing, Trash2, Send, Eye, EyeOff, CheckCircle,
-  AlertTriangle, Info, Loader2, MessageCircle, Plus, ChevronDown, Settings2, Pencil, X,
+  AlertTriangle, Info, Loader2, MessageCircle, Plus, ChevronDown, Settings2, Pencil, X, BookOpen,
 } from 'lucide-react';
 import { db } from '../db';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -231,6 +231,117 @@ function NotificationConfigPanel() {
           </div>
         </div>
       )}
+
+      {/* ── Setup Guide ── */}
+      <details className="group rounded-lg border border-slate-700/40 overflow-hidden">
+        <summary className="flex items-center gap-2 px-4 py-3 cursor-pointer bg-slate-800/30 hover:bg-slate-800/50 transition-colors list-none [&::-webkit-details-marker]:hidden">
+          <BookOpen className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span className="text-sm font-medium text-cyan-400">{t('eventAlert.notify.setupGuide')}</span>
+          <ChevronDown className="w-4 h-4 text-slate-500 ml-auto transition-transform duration-200 group-open:rotate-180" />
+        </summary>
+        <div className="px-4 py-4 border-t border-slate-700/30 space-y-4 text-sm leading-relaxed">
+          {channel === 'telegram' ? (
+            <>
+              <div>
+                <h5 className="text-base font-bold text-slate-200 mb-1">{t('eventAlert.notify.telegramGuide.title')}</h5>
+                <p className="text-slate-500">{t('eventAlert.notify.telegramGuide.subtitle')}</p>
+              </div>
+              {/* Part 1 */}
+              <div className="space-y-2.5">
+                <h6 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">A</span>
+                  {t('eventAlert.notify.telegramGuide.part1Title')}
+                </h6>
+                {(['step1','step2','step3','step4','step5','step6','step7'] as const).map((key, i) => (
+                  <div key={key} className="flex gap-3 items-start">
+                    <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">{i+1}</span>
+                    <div className="flex-1">
+                      <p className="text-slate-300 [&_b]:text-white [&_b]:font-semibold [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-slate-700 [&_code]:text-cyan-300 [&_code]:text-xs [&_code]:font-mono" dangerouslySetInnerHTML={{ __html: t(`eventAlert.notify.telegramGuide.${key}`) }} />
+                      {key === 'step6' && (
+                        <p className="text-amber-400/80 text-xs mt-1" dangerouslySetInnerHTML={{ __html: t('eventAlert.notify.telegramGuide.step6note') }} />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Part 2 */}
+              <div className="space-y-2.5 pt-2 border-t border-slate-700/20">
+                <h6 className="text-sm font-semibold text-green-400 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-xs font-bold shrink-0">B</span>
+                  {t('eventAlert.notify.telegramGuide.part2Title')}
+                </h6>
+                {(['step8','step9','step10','step11'] as const).map((key, i) => (
+                  <div key={key} className="flex gap-3 items-start">
+                    <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">{i+8}</span>
+                    <p className="text-slate-300 flex-1 [&_b]:text-white [&_b]:font-semibold [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-slate-700 [&_code]:text-cyan-300 [&_code]:text-xs [&_code]:font-mono" dangerouslySetInnerHTML={{ __html: t(`eventAlert.notify.telegramGuide.${key}`) }} />
+                  </div>
+                ))}
+              </div>
+              {/* Tips */}
+              <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 p-3 space-y-2">
+                <p className="text-slate-400 [&_b]:text-amber-300 [&_b]:font-semibold [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-slate-700 [&_code]:text-cyan-300 [&_code]:text-xs [&_code]:font-mono" dangerouslySetInnerHTML={{ __html: t('eventAlert.notify.telegramGuide.groupNote') }} />
+              </div>
+              <p className="text-emerald-400 font-medium [&_b]:text-white [&_b]:font-semibold" dangerouslySetInnerHTML={{ __html: t('eventAlert.notify.telegramGuide.done') }} />
+            </>
+          ) : (
+            <>
+              <div>
+                <h5 className="text-base font-bold text-slate-200 mb-1">{t('eventAlert.notify.whatsappGuide.title')}</h5>
+                <p className="text-slate-500">{t('eventAlert.notify.whatsappGuide.subtitle')}</p>
+              </div>
+              {/* Part 1 */}
+              <div className="space-y-2.5">
+                <h6 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">A</span>
+                  {t('eventAlert.notify.whatsappGuide.part1Title')}
+                </h6>
+                {(['step1','step2','step3','step4'] as const).map((key, i) => (
+                  <div key={key} className="flex gap-3 items-start">
+                    <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">{i+1}</span>
+                    <p className="text-slate-300 flex-1 [&_b]:text-white [&_b]:font-semibold [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-slate-700 [&_code]:text-cyan-300 [&_code]:text-xs [&_code]:font-mono [&_a]:text-cyan-400 [&_a]:underline" dangerouslySetInnerHTML={{ __html: t(`eventAlert.notify.whatsappGuide.${key}`) }} />
+                  </div>
+                ))}
+              </div>
+              {/* Part 2 */}
+              <div className="space-y-2.5 pt-2 border-t border-slate-700/20">
+                <h6 className="text-sm font-semibold text-green-400 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-xs font-bold shrink-0">B</span>
+                  {t('eventAlert.notify.whatsappGuide.part2Title')}
+                </h6>
+                {(['step5','step6','step7','step8'] as const).map((key, i) => (
+                  <div key={key} className="flex gap-3 items-start">
+                    <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">{i+5}</span>
+                    <div className="flex-1">
+                      <p className="text-slate-300 [&_b]:text-white [&_b]:font-semibold [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-slate-700 [&_code]:text-cyan-300 [&_code]:text-xs [&_code]:font-mono" dangerouslySetInnerHTML={{ __html: t(`eventAlert.notify.whatsappGuide.${key}`) }} />
+                      {key === 'step6' && (
+                        <p className="text-amber-400/80 text-xs mt-1" dangerouslySetInnerHTML={{ __html: t('eventAlert.notify.whatsappGuide.step6note') }} />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Part 3 */}
+              <div className="space-y-2.5 pt-2 border-t border-slate-700/20">
+                <h6 className="text-sm font-semibold text-purple-400 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-bold shrink-0">C</span>
+                  {t('eventAlert.notify.whatsappGuide.part3Title')}
+                </h6>
+                {(['step9','step10'] as const).map((key, i) => (
+                  <div key={key} className="flex gap-3 items-start">
+                    <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">{i+9}</span>
+                    <p className="text-slate-300 flex-1 [&_b]:text-white [&_b]:font-semibold [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-slate-700 [&_code]:text-cyan-300 [&_code]:text-xs [&_code]:font-mono" dangerouslySetInnerHTML={{ __html: t(`eventAlert.notify.whatsappGuide.${key}`) }} />
+                  </div>
+                ))}
+              </div>
+              {/* Tips */}
+              <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 p-3 space-y-2">
+                <p className="text-slate-400 [&_b]:text-amber-300 [&_b]:font-semibold [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-slate-700 [&_code]:text-cyan-300 [&_code]:text-xs [&_code]:font-mono" dangerouslySetInnerHTML={{ __html: t('eventAlert.notify.whatsappGuide.permanentNote') }} />
+              </div>
+              <p className="text-emerald-400 font-medium [&_b]:text-white [&_b]:font-semibold" dangerouslySetInnerHTML={{ __html: t('eventAlert.notify.whatsappGuide.done') }} />
+            </>
+          )}
+        </div>
+      </details>
 
       <div className="flex gap-2">
         <button className="btn-primary text-sm" onClick={handleSave} disabled={saving}>

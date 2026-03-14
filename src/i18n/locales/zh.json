@@ -967,7 +967,48 @@
       "error": "异常",
       "testScanPush": "测试推送上次扫描结果",
       "scanPushSuccess": "上次扫描结果已推送到 {{channels}}",
-      "pushFailed": "推送失败"
+      "pushFailed": "推送失败",
+      "setupGuide": "📖 配置教程",
+      "telegramGuide": {
+        "title": "Telegram Bot 配置教程",
+        "subtitle": "按照以下步骤创建 Telegram Bot 并获取 Chat ID，整个过程大约 2 分钟。",
+        "part1Title": "第一步：创建 Telegram Bot",
+        "step1": "打开 Telegram，在顶部搜索栏输入 <b>@BotFather</b>（它有蓝色认证标识 ✓）",
+        "step2": "点击 <b>Start</b> 按钮，或者直接发送 <b>/start</b> 开始对话",
+        "step3": "发送命令 <b>/newbot</b>，告诉 BotFather 你要创建一个新机器人",
+        "step4": "BotFather 会让你输入机器人的<b>显示名称</b>，随便取一个名字即可，比如 <code>我的预警机器人</code>",
+        "step5": "接着输入机器人的<b>用户名</b>，必须以 <code>bot</code> 结尾，比如 <code>myalerts_sentinel_bot</code>",
+        "step6": "BotFather 会回复一段 <b>Bot Token</b>，格式类似：<code>7123456789:AAHxxxxxxxxxxxxxxxxxxxxxx</code>",
+        "step6note": "⚠️ 请妥善保管此 Token！任何拥有此 Token 的人都可以控制你的机器人。",
+        "step7": "复制这串 Token，粘贴到上方的 <b>Bot Token</b> 输入框中",
+        "part2Title": "第二步：获取你的 Chat ID",
+        "step8": "在 Telegram 中搜索你刚创建的机器人（使用你取的用户名），点击 <b>Start</b> 激活它",
+        "step9": "搜索 <b>@userinfobot</b>，点击 <b>Start</b>（或发送 <b>/start</b>）",
+        "step10": "它会立刻回复你的用户信息，其中包含你的 <b>Chat ID</b>，是一串数字，比如 <code>123456789</code>",
+        "step11": "复制这个数字，粘贴到上方的 <b>Chat ID</b> 输入框中",
+        "groupNote": "💡 <b>想推送到群组？</b>将你的机器人添加到群组中，在群组里发一条消息，然后在浏览器访问 <code>https://api.telegram.org/bot&lt;你的TOKEN&gt;/getUpdates</code>，找到群组的 Chat ID（是一个负数，如 <code>-1001234567890</code>）。",
+        "done": "✅ 配置完成！点击上方的 <b>测试</b> 按钮验证设置，你的 Telegram 应该会收到一条测试消息。"
+      },
+      "whatsappGuide": {
+        "title": "WhatsApp Business API 配置教程",
+        "subtitle": "WhatsApp 消息推送需要 Meta（Facebook）开发者账号，请按以下步骤配置。",
+        "part1Title": "第一步：创建 Meta 开发者应用",
+        "step1": "访问 <a href='https://developers.facebook.com' target='_blank' class='text-cyan-400 underline'>developers.facebook.com</a>，使用 Facebook 账号登录",
+        "step2": "点击 <b>My Apps（我的应用）</b> → <b>Create App（创建应用）</b>",
+        "step3": "应用类型选择 <b>Business（商业）</b>，填写应用名称后点击 <b>创建</b>",
+        "step4": "在应用面板中找到 <b>WhatsApp</b>，点击 <b>Set Up（设置）</b>",
+        "part2Title": "第二步：获取 API 凭证",
+        "step5": "在 WhatsApp 设置页面，进入 <b>API Setup（API 设置）</b>",
+        "step6": "页面上会显示一个 <b>Temporary Access Token（临时访问令牌）</b>，复制它作为 <b>API Key / Token</b>",
+        "step6note": "⚠️ 临时 Token 有效期仅 24 小时。正式使用请在 <b>System Users（系统用户）</b> 设置中生成永久 Token。",
+        "step7": "同一页面会显示 <b>Phone Number ID（电话号码 ID）</b>，你的 API 地址格式为：<code>https://graph.facebook.com/v18.0/电话号码ID/messages</code>",
+        "step8": "将上述地址中的 <code>电话号码ID</code> 替换为你的实际 ID，粘贴到上方的 <b>API 地址</b> 输入框",
+        "part3Title": "第三步：配置接收人",
+        "step9": "在 <b>API Setup</b> 页面，将你的手机号添加为<b>测试接收人</b>，并通过短信验证码完成验证",
+        "step10": "在上方的<b>接收手机号</b>输入框中输入接收人的手机号（需包含国际区号，如 <code>+86 138xxxx</code>）",
+        "permanentNote": "💡 <b>正式使用提示：</b>测试期结束后，你需要注册 <b>WhatsApp 商业电话号码</b>、提交 <b>Business Verification（企业认证）</b>，并在 Meta Business 设置中生成<b>永久系统用户 Token</b>。",
+        "done": "✅ 配置完成！点击 <b>测试</b> 按钮发送测试消息，检查你的 WhatsApp 是否收到通知。"
+      }
     }
   }
 }
