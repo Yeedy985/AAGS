@@ -11,6 +11,7 @@
     "dev:electron": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "build": "tsc -b && vite build",
     "build:exe": "tsc -b && vite build && electron-builder --win",
+    "build:mac": "tsc -b && vite build && electron-builder --mac",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -35,6 +36,27 @@
         }
       ],
       "icon": "public/icon.ico"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "public/icon-512.png",
+      "category": "public.app-category.finance",
+      "artifactName": "AAGS-${version}-mac.${ext}"
+    },
+    "dmg": {
+      "title": "AAGS ${version}",
+      "icon": "public/icon-512.png",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
     },
     "publish": [
       {
