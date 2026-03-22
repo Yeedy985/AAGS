@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Upload, Trash2, Info, HardDrive, Timer, Globe } from 'lucide-react';
+import { Download, Upload, Trash2, Info, HardDrive, Timer, Globe, ArrowUpCircle, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { db } from '../db';
 import { useStore } from '../store/useStore';
@@ -17,7 +17,7 @@ const INTERVAL_KEYS: { key: string; value: number }[] = [
 ];
 
 export default function Settings() {
-  const { refreshIntervals, setRefreshIntervals } = useStore();
+  const { refreshIntervals, setRefreshIntervals, setActiveTab } = useStore();
   const isMobile = useIsMobile();
   const { t, i18n } = useTranslation();
   const [exportMsg, setExportMsg] = useState('');
@@ -222,12 +222,39 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Version Update */}
+      <div className={`card ${isMobile ? 'space-y-3' : 'space-y-4'}`}>
+        <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold flex items-center gap-2`}>
+          <div className="p-2 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.15) 0%, rgba(6,182,212,0.05) 100%)' }}>
+            <ArrowUpCircle className={`${isMobile ? 'w-4 h-4' : 'w-4.5 h-4.5'} text-cyan-400`} />
+          </div>
+          {t('settings.versionUpdate')}
+        </h3>
+        <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{t('settings.versionUpdateDesc')}</p>
+        <button
+          onClick={() => setActiveTab('version')}
+          className={`w-full flex items-center justify-between ${isMobile ? 'p-3' : 'p-4'} rounded-xl transition-all hover:bg-slate-700/30`}
+          style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.6) 0%, rgba(30,41,59,0.3) 100%)', border: '1px solid rgba(51,65,85,0.3)' }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center">
+              <ArrowUpCircle className="w-5 h-5 text-cyan-400" />
+            </div>
+            <div className="text-left">
+              <p className={`${isMobile ? 'text-sm' : ''} font-medium text-slate-200`}>{t('settings.checkVersionUpdate')}</p>
+              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-0.5`}>{t('settings.checkVersionUpdateDesc')}</p>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-slate-500" />
+        </button>
+      </div>
+
       {/* About */}
       <div className={`card ${isMobile ? 'space-y-2' : 'space-y-3'}`}>
         <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold`}>{t('settings.about')}</h3>
         <div className="text-sm text-slate-400 space-y-1">
           <p><span className="text-slate-300">{t('settings.aboutName')}:</span> Apex Adaptive Grid System</p>
-          <p><span className="text-slate-300">{t('settings.aboutVersion')}:</span> 1.0.0</p>
+          <p><span className="text-slate-300">{t('settings.aboutVersion')}:</span> 1.0.1</p>
           <p><span className="text-slate-300">{t('settings.aboutPosition')}:</span> {t('settings.aboutPositionDesc')}</p>
           <p><span className="text-slate-300">{t('settings.aboutGoal')}:</span> {t('settings.aboutGoalDesc')}</p>
         </div>

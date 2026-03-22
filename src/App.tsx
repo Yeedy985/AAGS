@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import AccountManager from './components/AccountManager';
@@ -9,15 +9,16 @@ import Reports from './components/Reports';
 import SentimentMonitor from './components/SentimentMonitor';
 import EventAlertPage from './components/EventAlert';
 import Settings from './components/Settings';
+import VersionUpdate from './components/VersionUpdate';
 import AppUpdater from './components/AppUpdater';
 import { useStore } from './store/useStore';
 import { db } from './db';
 import { getTicker24h, getAccountInfo, getPrice, setCurrentExchange } from './services/binance';
 import { getExchangeConfig } from './services/exchangeConfig';
-import { setExecutorCallbacks, startMonitorLoop } from './services/strategyExecutor';
+import { setExecutorCallbacks, syncAllStrategiesOrders } from './services/strategyExecutor';
 
 function App() {
-  const { activeTab, setStrategies, setApiConfig, apiConfig, setIsConnected, setTickers, setAccountInfo, refreshIntervals, updateStrategy } = useStore();
+  const { activeTab, setStrategies, setApiConfig, apiConfig, setIsConnected, setTickers, setAccountInfo, refreshIntervals, updateStrategy, symbols } = useStore();
 
   // 全局 ticker 加载（所有页面都能用最新价）
   const loadTickers = useCallback(async () => {
@@ -36,11 +37,12 @@ function App() {
     });
   }, [updateStrategy]);
 
-  // 启动时自动从 IndexedDB 加载 API 配置和策略，并恢复运行中策略的监控循环
+  // 启动时自动从 IndexedDB 加载 API 配置和策略，并完整同步挂单
+  const startupSyncDone = useRef(false);
   useEffect(() => {
     db.strategies.toArray().then(setStrategies);
 
-    // 自动加载已保存的 API Key，确保全局可用
+    // 自动加载已保存的 API Key
     if (!apiConfig) {
       db.apiConfigs.toArray().then((configs) => {
         if (configs.length > 0) {
@@ -48,30 +50,28 @@ function App() {
           setApiConfig(first);
           setIsConnected(true);
           setCurrentExchange(first.exchange || 'binance');
-
-          // 恢复所有 running 策略的监控循环
-          db.strategies.where('status').equals('running').toArray().then((runningStrategies) => {
-            for (const s of runningStrategies) {
-              if (s.id) {
-                console.log(`[全局] 自动恢复策略监控: ${s.name} (ID=${s.id})`);
-                startMonitorLoop(s.id, first);
-              }
-            }
-          });
-        }
-      });
-    } else {
-      // apiConfig 已存在，直接恢复监控
-      db.strategies.where('status').equals('running').toArray().then((runningStrategies) => {
-        for (const s of runningStrategies) {
-          if (s.id) {
-            console.log(`[全局] 自动恢复策略监控: ${s.name} (ID=${s.id})`);
-            startMonitorLoop(s.id, apiConfig);
-          }
         }
       });
     }
   }, [setStrategies, setApiConfig, apiConfig, setIsConnected]);
+
+  // apiConfig 和 symbols 都就绪后，执行一次完整挂单同步
+  useEffect(() => {
+    if (startupSyncDone.current || !apiConfig || symbols.length === 0) return;
+    startupSyncDone.current = true;
+
+    console.log('[全局] 启动时自动同步所有策略挂单...');
+    syncAllStrategiesOrders(apiConfig, symbols, (msg) => {
+      console.log(`[全局同步] ${msg}`);
+    }).then((results) => {
+      const total = results.reduce((a, r) => a + r.placedAfter, 0);
+      console.log(`[全局] 同步完成: ${results.length} 个策略, 共 ${total} 个挂单`);
+      // 刷新策略列表
+      db.strategies.toArray().then(setStrategies);
+    }).catch((err) => {
+      console.error('[全局] 启动同步失败:', err);
+    });
+  }, [apiConfig, symbols, setStrategies]);
 
   // 全局账户资产刷新
   const refreshAccountInfo = useCallback(async () => {
@@ -151,6 +151,7 @@ function App() {
       case 'sentiment': return <SentimentMonitor />;
       case 'alerts': return <EventAlertPage />;
       case 'settings': return <Settings />;
+      case 'version': return <VersionUpdate />;
       default: return <Dashboard />;
     }
   };

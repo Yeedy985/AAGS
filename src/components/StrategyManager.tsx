@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronUp, Loader2, AlertCircle, Share2, X as XIcon } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Loader2, AlertCircle, Share2, X as XIcon, RefreshCw, Edit3 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/useStore';
@@ -8,7 +8,7 @@ import type { Strategy } from '../types';
 import StrategyCreator from './StrategyCreator';
 import StrategyDetail from './StrategyDetail';
 import StrategyPlaza from './StrategyPlaza';
-import { startStrategy, stopStrategy, pauseStrategy, resumeStrategy, setExecutorCallbacks, updateStrategyProfit, repairMissingTradeRecords } from '../services/strategyExecutor';
+import { startStrategy, stopStrategy, pauseStrategy, resumeStrategy, setExecutorCallbacks, updateStrategyProfit, repairMissingTradeRecords, syncAllStrategiesOrders } from '../services/strategyExecutor';
 import { shareStrategy, unshareStrategy } from '../services/strategyPlazaService';
 import { useIsMobile } from '../hooks/useIsMobile';
 
@@ -31,11 +31,14 @@ export default function StrategyManager() {
   const isMobile = useIsMobile();
   const { t } = useTranslation();
   const [showCreator, setShowCreator] = useState(false);
+  const [editingStrategy, setEditingStrategy] = useState<Strategy | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [operatingIds, setOperatingIds] = useState<Set<number>>(new Set());
   const [errors, setErrors] = useState<Record<number, string>>({});
   const [logs, setLogs] = useState<Record<number, string[]>>({});
   const [orderTab, setOrderTab] = useState<Record<number, 'placed' | 'filled' | 'pending' | null>>({});
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
 
   // 实时查询所有策略的 gridOrders
   const allGridOrders = useLiveQuery(
@@ -161,6 +164,25 @@ export default function StrategyManager() {
     setShowCreator(false);
   };
 
+  const handleEdited = async (updated: Strategy) => {
+    if (!updated.id) return;
+    await db.strategies.put(updated);
+    updateStrategy(updated);
+    // 如果策略正在运行，重启监控循环使修改生效
+    if (updated.status === 'running' && apiConfig) {
+      try {
+        await stopStrategy(updated.id, apiConfig);
+        // 短暂等待确保停止完成
+        await new Promise(r => setTimeout(r, 500));
+        const si = getSymbolInfo(updated.symbol);
+        await startStrategy(updated, apiConfig, si);
+      } catch (err: any) {
+        setErrors(prev => ({ ...prev, [updated.id!]: err.message }));
+      }
+    }
+    setEditingStrategy(null);
+  };
+
   // ── 分享相关 ──
   const [shareModalStrategy, setShareModalStrategy] = useState<Strategy | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -261,6 +283,31 @@ export default function StrategyManager() {
     setStrategies([...strategies, strategy]);
   };
 
+  const handleSyncOrders = async () => {
+    if (!apiConfig || syncing) return;
+    setSyncing(true);
+    setSyncMsg(t('strategy.syncStarted'));
+    try {
+      const results = await syncAllStrategiesOrders(apiConfig, symbols, (msg) => {
+        setSyncMsg(msg);
+      });
+      const totalPlaced = results.reduce((a, r) => a + r.placedAfter, 0);
+      const repaired = results.filter(r => r.repaired).length;
+      if (repaired > 0) {
+        setSyncMsg(t('strategy.syncDoneRepaired', { count: results.length, placed: totalPlaced, repaired }));
+      } else {
+        setSyncMsg(t('strategy.syncDoneOk', { count: results.length, placed: totalPlaced }));
+      }
+      // 刷新策略列表
+      const fresh = await db.strategies.toArray();
+      setStrategies(fresh);
+    } catch (err: any) {
+      setSyncMsg(t('strategy.syncFailed') + ': ' + err.message);
+    }
+    setSyncing(false);
+    setTimeout(() => setSyncMsg(''), 5000);
+  };
+
   const statusLabels: Record<string, { text: string; class: string }> = {
     idle: { text: t('strategy.status.idle'), class: 'badge-blue' },
     running: { text: t('strategy.status.running'), class: 'badge-green' },
@@ -274,15 +321,39 @@ export default function StrategyManager() {
     <div className={isMobile ? 'space-y-3' : 'space-y-4'}>
       <div className="flex items-center justify-between">
         <h1 className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>{t('strategy.title')}</h1>
-        <button className={`btn-primary flex items-center gap-1.5 ${isMobile ? 'text-xs px-3 py-2' : ''}`} onClick={() => setShowCreator(true)}>
-          <Plus className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
-          {t('strategy.createNew')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className={`flex items-center gap-1.5 rounded-lg font-medium transition-all ${isMobile ? 'text-xs px-3 py-2' : 'text-sm px-4 py-2'} ${syncing ? 'bg-cyan-800/50 text-cyan-300 cursor-wait' : 'bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 hover:text-cyan-300 border border-cyan-500/30'}`}
+            onClick={handleSyncOrders}
+            disabled={syncing || !apiConfig}
+            title={t('strategy.syncOrdersDesc')}
+          >
+            <RefreshCw className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} ${syncing ? 'animate-spin' : ''}`} />
+            {t('strategy.syncOrders')}
+          </button>
+          <button className={`btn-primary flex items-center gap-1.5 ${isMobile ? 'text-xs px-3 py-2' : ''}`} onClick={() => setShowCreator(true)}>
+            <Plus className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+            {t('strategy.createNew')}
+          </button>
+        </div>
       </div>
+
+      {/* 同步状态提示 */}
+      {syncMsg && (
+        <div className={`rounded-lg px-4 py-2.5 text-sm font-medium flex items-center gap-2 ${syncing ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-300' : syncMsg.includes(t('strategy.syncFailed')) ? 'bg-red-500/10 border border-red-500/20 text-red-300' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'}`}>
+          {syncing && <Loader2 className="w-4 h-4 animate-spin" />}
+          {syncMsg}
+        </div>
+      )}
 
       {/* Strategy Creator Modal */}
       {showCreator && (
         <StrategyCreator onCreated={handleCreated} onCancel={() => setShowCreator(false)} />
+      )}
+
+      {/* Strategy Editor Modal */}
+      {editingStrategy && (
+        <StrategyCreator editStrategy={editingStrategy} onCreated={handleEdited} onCancel={() => setEditingStrategy(null)} />
       )}
 
       {/* Share Confirmation Modal */}
@@ -749,6 +820,13 @@ export default function StrategyManager() {
                           {t('common.resume')}
                         </button>
                       )}
+                      <button
+                        className={`${isMobile ? 'p-2' : 'p-2.5'} rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors`}
+                        onClick={() => setEditingStrategy(s)}
+                        title={t('strategy.editStrategy')}
+                      >
+                        <Edit3 className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+                      </button>
                       <button
                         className={`${isMobile ? 'p-2' : 'p-2.5'} rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors`}
                         onClick={() => setExpandedId(isExpanded ? null : s.id!)}

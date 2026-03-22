@@ -14,6 +14,8 @@ const _executors: Map<number, ExecutorState> = new Map();
 const _checkLocks: Map<number, boolean> = new Map(); // 防并发锁
 const _lastPlazaSync: Map<number, number> = new Map(); // 策略广场上次同步时间
 const PLAZA_SYNC_INTERVAL = 5 * 60 * 1000; // 每 5 分钟同步一次
+const _lastGridIntegrityCheck: Map<number, number> = new Map(); // 网格完整性上次检查时间
+const GRID_INTEGRITY_INTERVAL = 60 * 1000; // 每 60 秒做一次完整网格补齐检查
 let _onStrategyUpdate: ((strategy: Strategy) => void) | null = null;
 let _onLog: ((strategyId: number, msg: string) => void) | null = null;
 
@@ -633,6 +635,98 @@ export async function repairMissingTradeRecords(strategyId: number, apiConfig: A
     await sleep(200);
   }
 
+  // ===== Step 3c: 根据策略配置重新生成完整网格，补齐完全缺失的网格 =====
+  // 上面 Step 3b 只能处理本地 DB 有记录的网格。如果某些网格的记录被删除了或从未下过单，
+  // 需要根据策略 layers 配置重新生成，对比已有 placed 订单，缺失的重新下单。
+  let regenerated = 0;
+
+  // 重新获取当前已 placed 的网格集合
+  const currentPlaced = await db.gridOrders
+    .where('strategyId').equals(strategyId)
+    .filter(o => o.status === 'placed' || o.status === 'pending')
+    .toArray();
+  const placedKeys = new Set(currentPlaced.map(o => `${o.layer}_${o.gridIndex}`));
+
+  // 获取当前价格和趋势
+  let currentPrice: number;
+  try {
+    currentPrice = await getPrice(strategy.symbol);
+  } catch (err: any) {
+    log(strategyId, `[Step3c] 获取价格失败，跳过补齐: ${err.message}`);
+    currentPrice = 0;
+  }
+
+  if (currentPrice > 0) {
+    let trend: 'bull' | 'bear' | 'neutral' = 'neutral';
+    try {
+      const klines = await getKlines(strategy.symbol, '1h', 30);
+      const closes = klines.map(k => k.close);
+      trend = detectTrend(closes, strategy.risk.trendDefenseEmaFast, strategy.risk.trendDefenseEmaSlow);
+    } catch { /* 使用 neutral */ }
+
+    // 计算应该存在的所有网格总数
+    let expectedTotal = 0;
+    for (const layer of strategy.layers) {
+      if (!layer.enabled) continue;
+      expectedTotal += layer.gridCount;
+    }
+
+    log(strategyId, `[Step3c] 已有挂单: ${placedKeys.size}, 策略应有: ${expectedTotal}`);
+
+    if (placedKeys.size < expectedTotal) {
+      // 为每个 enabled 层生成网格订单，只补缺失的
+      for (const layer of strategy.layers) {
+        if (!layer.enabled) continue;
+        const expectedOrders = generateGridOrders(strategy, currentPrice, layer, trend);
+
+        for (const order of expectedOrders) {
+          const key = `${order.layer}_${order.gridIndex}`;
+          if (placedKeys.has(key)) continue; // 已有挂单，跳过
+
+          const qty = parseFloat(formatQuantity(order.quantity, stepSize));
+          const price = parseFloat(formatPrice(order.price, pricePrecision));
+          const notional = qty * price;
+          if (notional < minNotional) continue;
+
+          try {
+            const result = await placeOrder({
+              apiKey: apiConfig.apiKey,
+              apiSecretEncrypted: apiConfig.apiSecret,
+              symbol: strategy.symbol,
+              side: order.side === 'buy' ? 'BUY' : 'SELL',
+              type: 'LIMIT',
+              quantity: formatQuantity(order.quantity, stepSize),
+              price: formatPrice(order.price, pricePrecision),
+              timeInForce: 'GTC',
+            });
+
+            await db.gridOrders.add({
+              strategyId,
+              layer: order.layer,
+              gridIndex: order.gridIndex,
+              side: order.side,
+              price: order.price,
+              quantity: order.quantity,
+              filledQuantity: 0,
+              status: 'placed',
+              targetPrice: order.targetPrice,
+              profitRate: order.profitRate,
+              binanceOrderId: String(result.orderId),
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            });
+            placedKeys.add(key);
+            regenerated++;
+            log(strategyId, `[Step3c] 补挂: ${order.side} ${key} @ $${formatPrice(order.price, pricePrecision)}`);
+          } catch (err: any) {
+            log(strategyId, `[Step3c] 补挂失败 ${key}: ${err.message}`);
+          }
+          await sleep(200);
+        }
+      }
+    }
+  }
+
   // ===== Step 4: 补全已有 tradeRecords 中缺失的手续费 =====
   let feeFixed = 0;
   const allTrades = await db.tradeRecords.where('strategyId').equals(strategyId).toArray();
@@ -647,9 +741,9 @@ export async function repairMissingTradeRecords(strategyId: number, apiConfig: A
     }
   }
 
-  const totalActions = syncedCount + cancelledCount + reversePlaced + feeFixed;
+  const totalActions = syncedCount + cancelledCount + reversePlaced + regenerated + feeFixed;
   if (totalActions > 0) {
-    log(strategyId, `同步完成: ${syncedCount}笔成交补全, ${cancelledCount}笔已取消, ${reversePlaced}个反向单已挂出, ${feeFixed}笔手续费补全`);
+    log(strategyId, `同步完成: ${syncedCount}笔成交补全, ${cancelledCount}笔已取消, ${reversePlaced}个反向单已挂出, ${regenerated}个网格已补齐, ${feeFixed}笔手续费补全`);
   } else {
     log(strategyId, `订单状态完全同步`);
   }
@@ -940,6 +1034,101 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
     }
     await sleep(200);
   }
+
+  // ===== 阶段D: 定期网格完整性检查 — 补齐完全缺失的网格 =====
+  // 每 GRID_INTEGRITY_INTERVAL 做一次，根据策略 layers 配置重新生成完整网格，
+  // 对比已有 placed 订单，缺失的重新下单。
+  const now = Date.now();
+  const lastCheck = _lastGridIntegrityCheck.get(strategyId) || 0;
+  if (now - lastCheck >= GRID_INTEGRITY_INTERVAL) {
+    _lastGridIntegrityCheck.set(strategyId, now);
+
+    const currentPlacedOrders = await db.gridOrders
+      .where('strategyId').equals(strategyId)
+      .filter(o => o.status === 'placed' || o.status === 'pending')
+      .toArray();
+    const placedKeys = new Set(currentPlacedOrders.map(o => `${o.layer}_${o.gridIndex}`));
+
+    let expectedTotal = 0;
+    for (const layer of strategy.layers) {
+      if (!layer.enabled) continue;
+      expectedTotal += layer.gridCount;
+    }
+
+    if (placedKeys.size < expectedTotal) {
+      log(strategyId, `[网格检查] 挂单 ${placedKeys.size}/${expectedTotal}, 开始补齐...`);
+
+      let curPrice: number;
+      try {
+        curPrice = await getPrice(strategy.symbol);
+      } catch {
+        curPrice = 0;
+      }
+
+      if (curPrice > 0) {
+        let trend: 'bull' | 'bear' | 'neutral' = 'neutral';
+        try {
+          const klines = await getKlines(strategy.symbol, '1h', 30);
+          const closes = klines.map(k => k.close);
+          trend = detectTrend(closes, strategy.risk.trendDefenseEmaFast, strategy.risk.trendDefenseEmaSlow);
+        } catch { /* neutral */ }
+
+        let filled = 0;
+        for (const layer of strategy.layers) {
+          if (!layer.enabled) continue;
+          const expectedOrders = generateGridOrders(strategy, curPrice, layer, trend);
+
+          for (const order of expectedOrders) {
+            const key = `${order.layer}_${order.gridIndex}`;
+            if (placedKeys.has(key)) continue;
+
+            const qty = parseFloat(formatQuantity(order.quantity, stepSize));
+            const price = parseFloat(formatPrice(order.price, pricePrecision));
+            const notional = qty * price;
+            if (notional < minNotional) continue;
+
+            try {
+              const result = await placeOrder({
+                apiKey: apiConfig.apiKey,
+                apiSecretEncrypted: apiConfig.apiSecret,
+                symbol: strategy.symbol,
+                side: order.side === 'buy' ? 'BUY' : 'SELL',
+                type: 'LIMIT',
+                quantity: formatQuantity(order.quantity, stepSize),
+                price: formatPrice(order.price, pricePrecision),
+                timeInForce: 'GTC',
+              });
+
+              await db.gridOrders.add({
+                strategyId,
+                layer: order.layer,
+                gridIndex: order.gridIndex,
+                side: order.side,
+                price: order.price,
+                quantity: order.quantity,
+                filledQuantity: 0,
+                status: 'placed',
+                targetPrice: order.targetPrice,
+                profitRate: order.profitRate,
+                binanceOrderId: String(result.orderId),
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+              });
+              placedKeys.add(key);
+              filled++;
+            } catch (err: any) {
+              log(strategyId, `[网格检查] 补挂失败 ${key}: ${err.message}`);
+            }
+            await sleep(200);
+          }
+        }
+
+        if (filled > 0) {
+          log(strategyId, `[网格检查] 补齐完成: +${filled} 个挂单, 当前 ${placedKeys.size}/${expectedTotal}`);
+        }
+      }
+    }
+  }
 }
 
 // ==================== 更新策略利润 ====================
@@ -1199,6 +1388,103 @@ function stopMonitorLoop(strategyId: number) {
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ==================== 全局同步所有策略挂单 ====================
+export interface SyncResult {
+  strategyId: number;
+  strategyName: string;
+  symbol: string;
+  placedBefore: number;
+  placedAfter: number;
+  repaired: boolean;
+  error?: string;
+}
+
+export async function syncAllStrategiesOrders(
+  apiConfig: ApiConfig,
+  symbols: SymbolInfo[],
+  onProgress?: (msg: string) => void,
+): Promise<SyncResult[]> {
+  const strategies = await db.strategies.toArray();
+  const runningStrategies = strategies.filter(s => s.status === 'running' || s.status === 'paused');
+
+  if (runningStrategies.length === 0) {
+    onProgress?.('没有运行中的策略');
+    return [];
+  }
+
+  setCurrentExchange(apiConfig.exchange || 'binance');
+  const results: SyncResult[] = [];
+
+  for (const strategy of runningStrategies) {
+    if (!strategy.id) continue;
+    const si = symbols.find(s => s.symbol === strategy.symbol);
+
+    // 同步前的挂单数
+    const beforeOrders = await db.gridOrders
+      .where('strategyId').equals(strategy.id)
+      .filter(o => o.status === 'placed')
+      .count();
+
+    onProgress?.(`正在同步: ${strategy.name} (${strategy.symbol})...`);
+
+    try {
+      // 1. 修复丢失的成交记录 + 补挂反向单
+      await repairMissingTradeRecords(strategy.id, apiConfig, si);
+
+      // 2. 重算利润
+      await updateStrategyProfit(strategy.id);
+
+      // 3. 确保监控循环在运行
+      if (strategy.status === 'running' && !_executors.get(strategy.id)?.running) {
+        startMonitorLoop(strategy.id, apiConfig, si);
+      }
+
+      // 同步后的挂单数
+      const afterOrders = await db.gridOrders
+        .where('strategyId').equals(strategy.id)
+        .filter(o => o.status === 'placed')
+        .count();
+
+      const fresh = await db.strategies.get(strategy.id);
+      if (fresh) _onStrategyUpdate?.(fresh);
+
+      results.push({
+        strategyId: strategy.id,
+        strategyName: strategy.name,
+        symbol: strategy.symbol,
+        placedBefore: beforeOrders,
+        placedAfter: afterOrders,
+        repaired: afterOrders !== beforeOrders,
+      });
+
+      const diff = afterOrders - beforeOrders;
+      if (diff > 0) {
+        onProgress?.(`${strategy.name}: 补挂了 ${diff} 个订单 (${beforeOrders} → ${afterOrders})`);
+      } else if (diff < 0) {
+        onProgress?.(`${strategy.name}: 清理了 ${-diff} 个无效订单 (${beforeOrders} → ${afterOrders})`);
+      } else {
+        onProgress?.(`${strategy.name}: 挂单正常 (${afterOrders} 个)`);
+      }
+    } catch (err: any) {
+      log(strategy.id, `同步失败: ${err.message}`);
+      results.push({
+        strategyId: strategy.id,
+        strategyName: strategy.name,
+        symbol: strategy.symbol,
+        placedBefore: beforeOrders,
+        placedAfter: beforeOrders,
+        repaired: false,
+        error: err.message,
+      });
+      onProgress?.(`${strategy.name}: 同步失败 - ${err.message}`);
+    }
+
+    await sleep(500); // 策略间留间隔，避免限频
+  }
+
+  return results;
 }
 
 // 获取某个策略的执行状态

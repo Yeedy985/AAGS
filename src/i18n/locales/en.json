@@ -302,6 +302,7 @@
       "swing": "Swing Trading Layer: Uses more grids with moderate profit margins to capture frequent daily oscillations. The primary profit driver with balanced grid spacing, high trading frequency, and optimal capital utilization.",
       "spike": "Spike Capture Layer: Exploits extreme price wicks for low-buy/high-sell opportunities. Widest grid range with highest profit margins, low trigger frequency but extremely high per-trade returns, designed to harvest market panic and greed moments."
     },
+    "editStrategy": "Edit Strategy",
     "shareToPlaza": "Share to Strategy Plaza",
     "sharePrivacy": "Privacy Notice",
     "sharePrivacyDesc": "Only strategy parameters and performance data will be uploaded. <strong>No API Keys, account information, or personal data will be shared.</strong> Other users can see: trading pair, grid configuration, return rate, runtime, etc. You can unshare at any time.",
@@ -313,6 +314,12 @@
     "shareFailed": "Share failed",
     "unshareFailed": "Unshare failed",
     "shareSuccess": "🎉 Strategy shared! Others can now see it in the Strategy Plaza",
+    "syncOrders": "Sync Orders",
+    "syncOrdersDesc": "Check all strategies' order status and replenish missing orders",
+    "syncStarted": "Syncing all strategy orders...",
+    "syncDoneRepaired": "Sync done: {{count}} strategies, {{placed}} orders, repaired {{repaired}} strategies",
+    "syncDoneOk": "Sync done: {{count}} strategies, {{placed}} orders, all good",
+    "syncFailed": "Sync failed",
     "runtimeFormat": {
       "days": "d",
       "hours": "h",
@@ -436,6 +443,8 @@
     "summaryRange": "Range",
     "summaryGridTotal": "Total Grids",
     "createStrategy": "Create Strategy",
+    "saveChanges": "Save Changes",
+    "editTitle": "Edit Strategy",
     "defaultStrategyName": "{{symbol}} Grid Strategy"
   },
   "detail": {
@@ -635,7 +644,34 @@
     "aboutPositionDesc": "Adaptive volatility three-layer grid quantitative system for professional users",
     "aboutGoal": "Goal",
     "aboutGoalDesc": "Long-term survival and steady compounding, not short-term speculation",
-    "storageUsed": "Used {{used}} MB / {{quota}} MB"
+    "storageUsed": "Used {{used}} MB / {{quota}} MB",
+    "versionUpdate": "Version Update",
+    "versionUpdateDesc": "View changelog and update to the latest version",
+    "checkVersionUpdate": "Check for Updates",
+    "checkVersionUpdateDesc": "View release history and changelog, one-click update"
+  },
+  "version": {
+    "title": "Version Update",
+    "currentVersion": "Current Version",
+    "newVersionAvailable": "New Version Available",
+    "updateDesc": "Update to the latest version for the best experience and new features",
+    "updateNow": "Update Now",
+    "upToDate": "Up to Date",
+    "upToDateDesc": "You are running the latest version, no update needed",
+    "loading": "Fetching version info...",
+    "fetchFailed": "Failed to fetch version info",
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "releaseHistory": "Release History",
+    "current": "Current",
+    "latest": "Latest",
+    "noChangelog": "No changelog available",
+    "noReleases": "No releases found",
+    "downloadExe": "Download Installer",
+    "checkingElectron": "Checking for updates...",
+    "downloadingElectron": "Downloading update...",
+    "alreadyLatest": "Already up to date",
+    "updatingWeb": "Updating, page will refresh..."
   },
   "sentiment": {
     "title": "Sentinel-X Signal Monitor",

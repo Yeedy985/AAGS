@@ -302,6 +302,7 @@
       "swing": "震荡波动层：使用较多的网格数和适中的利润率，捕捉日常震荡中的频繁波动。是主要的利润来源，网格间距适中，交易频率高，资金利用率最佳。",
       "spike": "插针收割层：利用极端价格波动（插针）进行低买高卖。网格区间最宽，利润率最高，触发频率低但单笔收益极高，专门收割市场恐慌和贪婪时刻。"
     },
+    "editStrategy": "编辑策略",
     "shareToPlaza": "分享策略到策略广场",
     "sharePrivacy": "隐私说明",
     "sharePrivacyDesc": "仅上传策略参数和运行收益数据，<strong>不会上传任何 API Key、账户信息或个人隐私数据</strong>。其他用户可以看到：交易对、网格配置、收益率、运行时长等。你可以随时取消分享。",
@@ -313,6 +314,12 @@
     "shareFailed": "分享失败",
     "unshareFailed": "取消分享失败",
     "shareSuccess": "🎉 策略分享成功！其他用户可以在策略广场看到你的策略",
+    "syncOrders": "同步挂单",
+    "syncOrdersDesc": "检查所有策略的挂单状态，补齐缺失的挂单",
+    "syncStarted": "正在同步所有策略挂单...",
+    "syncDoneRepaired": "同步完成: {{count}} 个策略, {{placed}} 个挂单, 修复了 {{repaired}} 个策略",
+    "syncDoneOk": "同步完成: {{count}} 个策略, {{placed}} 个挂单, 全部正常",
+    "syncFailed": "同步失败",
     "runtimeFormat": {
       "days": "天",
       "hours": "时",
@@ -436,6 +443,8 @@
     "summaryRange": "区间",
     "summaryGridTotal": "网格总数",
     "createStrategy": "创建策略",
+    "saveChanges": "保存修改",
+    "editTitle": "编辑策略",
     "defaultStrategyName": "{{symbol}} 网格策略"
   },
   "detail": {
@@ -635,7 +644,34 @@
     "aboutPositionDesc": "面向专业用户的自适应波动率三层网格量化系统",
     "aboutGoal": "目标",
     "aboutGoalDesc": "长期生存和稳定复利，而不是短期暴利",
-    "storageUsed": "已使用 {{used}} MB / {{quota}} MB"
+    "storageUsed": "已使用 {{used}} MB / {{quota}} MB",
+    "versionUpdate": "版本更新",
+    "versionUpdateDesc": "查看版本更新日志，在线更新到最新版本",
+    "checkVersionUpdate": "查看版本更新",
+    "checkVersionUpdateDesc": "查看历史版本和更新日志，一键更新"
+  },
+  "version": {
+    "title": "版本更新",
+    "currentVersion": "当前版本",
+    "newVersionAvailable": "发现新版本",
+    "updateDesc": "建议更新到最新版本以获得最佳体验和最新功能",
+    "updateNow": "立即更新",
+    "upToDate": "已是最新版本",
+    "upToDateDesc": "当前版本已经是最新的，无需更新",
+    "loading": "正在获取版本信息...",
+    "fetchFailed": "获取版本信息失败",
+    "retry": "重试",
+    "refresh": "刷新",
+    "releaseHistory": "版本历史",
+    "current": "当前版本",
+    "latest": "最新版",
+    "noChangelog": "暂无更新日志",
+    "noReleases": "暂无发布版本",
+    "downloadExe": "下载安装包",
+    "checkingElectron": "正在检查更新...",
+    "downloadingElectron": "正在下载更新...",
+    "alreadyLatest": "已经是最新版本",
+    "updatingWeb": "正在更新，页面即将刷新..."
   },
   "sentiment": {
     "title": "Sentinel-X 信号监控",

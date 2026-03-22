@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 interface Props {
   onCreated: (strategy: Strategy) => void;
   onCancel: () => void;
+  editStrategy?: Strategy;
 }
 
 const defaultRisk: RiskConfig = {
@@ -37,7 +38,7 @@ const defaultLayers: GridLayerConfig[] = [
     fixedProfitRate: 10, perGridMinRate: 10, perGridMaxRate: 30, distBaseRate: 5, distIncreaseStep: 2, distMaxRate: 30, trendBaseRate: 10, trendBullMultiplier: 0.7, trendBearMultiplier: 2 },
 ];
 
-export default function StrategyCreator({ onCreated, onCancel }: Props) {
+export default function StrategyCreator({ onCreated, onCancel, editStrategy }: Props) {
   const { symbols, setSymbols, apiConfig } = useStore();
   const isMobile = useIsMobile();
   const { t } = useTranslation();
@@ -100,29 +101,32 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
     setConnectionError('');
     handleCheckConnection(config);
   };
-  const [step, setStep] = useState(1);
-  const [symbolSearch, setSymbolSearch] = useState('');
-  const [symbol, setSymbol] = useState('');
+  const isEdit = !!editStrategy;
+  const [step, setStep] = useState(isEdit ? 2 : 1);
+  const [symbolSearch, setSymbolSearch] = useState(editStrategy ? editStrategy.symbol.replace('USDT', '') : '');
+  const [symbol, setSymbol] = useState(editStrategy?.symbol || '');
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [name, setName] = useState('');
-  const [totalFund, setTotalFund] = useState(1000);
-  const [entryPrice, setEntryPrice] = useState(0);
-  const [rangeMode, setRangeMode] = useState<RangeMode>('fixed');
-  const [upperPrice, setUpperPrice] = useState(0);
-  const [lowerPrice, setLowerPrice] = useState(0);
-  const [atrPeriod] = useState(14);
-  const [atrMultiplier] = useState(2);
-  const [layers, setLayers] = useState<GridLayerConfig[]>(defaultLayers);
-  const [profitAllocation, setProfitAllocation] = useState<ProfitAllocation>('ratio');
-  const [profitRatio, setProfitRatio] = useState(50);
+  const [name, setName] = useState(editStrategy?.name || '');
+  const [totalFund, setTotalFund] = useState(editStrategy?.totalFund || 1000);
+  const [entryPrice, setEntryPrice] = useState(editStrategy?.centerPrice || 0);
+  const [rangeMode, setRangeMode] = useState<RangeMode>(editStrategy?.rangeMode || 'fixed');
+  const [upperPrice, setUpperPrice] = useState(editStrategy?.upperPrice || 0);
+  const [lowerPrice, setLowerPrice] = useState(editStrategy?.lowerPrice || 0);
+  const [upperPriceText, setUpperPriceText] = useState(editStrategy?.upperPrice ? String(editStrategy.upperPrice) : '');
+  const [lowerPriceText, setLowerPriceText] = useState(editStrategy?.lowerPrice ? String(editStrategy.lowerPrice) : '');
+  const [atrPeriod] = useState(editStrategy?.atrPeriod || 14);
+  const [atrMultiplier] = useState(editStrategy?.atrMultiplier || 2);
+  const [layers, setLayers] = useState<GridLayerConfig[]>(editStrategy?.layers || defaultLayers);
+  const [profitAllocation, setProfitAllocation] = useState<ProfitAllocation>(editStrategy?.profitAllocation || 'ratio');
+  const [profitRatio, setProfitRatio] = useState(editStrategy?.profitRatio || 50);
   const [reinvestMode, setReinvestMode] = useState<'per_grid' | 'whole_strategy'>('per_grid');
   const [thresholdHoldCoinPrice, setThresholdHoldCoinPrice] = useState(0);
   const [thresholdHoldUsdtPrice, setThresholdHoldUsdtPrice] = useState(0);
-  const [endMode, setEndMode] = useState<EndMode>('keep_position');
-  const [autoRebalance, setAutoRebalance] = useState(true);
-  const [currentPrice, setCurrentPrice] = useState(0);
+  const [endMode, setEndMode] = useState<EndMode>(editStrategy?.endMode || 'keep_position');
+  const [autoRebalance, setAutoRebalance] = useState(editStrategy?.autoRebalance ?? true);
+  const [currentPrice, setCurrentPrice] = useState(editStrategy?.centerPrice || 0);
   const [volatility, setVolatility] = useState({ level: '', percent: 0 });
   const [, setLoading] = useState(false);
 
@@ -131,6 +135,26 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
       getExchangeInfo().then(setSymbols);
     }
   }, [symbols, setSymbols]);
+
+  // 编辑模式: 自动获取当前价格和波动率
+  useEffect(() => {
+    if (!isEdit || !editStrategy?.symbol) return;
+    (async () => {
+      try {
+        const [price, klines] = await Promise.all([
+          getPrice(editStrategy.symbol),
+          getKlines(editStrategy.symbol, '1h', 100),
+        ]);
+        setCurrentPrice(price);
+        const atr = calculateATR(klines, atrPeriod);
+        const vol = getVolatilityLevel(atr, price);
+        setVolatility(vol);
+      } catch (err) {
+        console.error('[编辑模式] 获取价格失败:', err);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -188,12 +212,38 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
     setLoading(false);
   };
 
+  // 智能小数位: 根据价格大小自适应精度
+  const smartPrice = (p: number) => {
+    if (p === 0) return '0';
+    const abs = Math.abs(p);
+    if (abs >= 1000) return p.toFixed(2);
+    if (abs >= 1) return p.toFixed(4);
+    if (abs >= 0.01) return p.toFixed(6);
+    return p.toFixed(8);
+  };
+  const smartRound = (p: number) => +smartPrice(p);
+
   const updateLayerPrices = (lower: number, upper: number) => {
-    const halfRange = (upper - lower) / 2;
-    const center = entryPrice > 0 ? entryPrice : (upper + lower) / 2;
+    const center = entryPrice > 0 ? entryPrice : 0;
+    if (center <= 0) return;
+
+    // 计算实际的上下界价格
+    let actualUpper: number;
+    let actualLower: number;
+    if (rangeMode === 'percentage') {
+      // percentage 模式: upper/lower 是百分比，如 30 和 -30
+      actualUpper = center * (1 + upper / 100);
+      actualLower = center * (1 + lower / 100);
+    } else {
+      // fixed 模式: upper/lower 就是实际价格
+      actualUpper = upper;
+      actualLower = lower;
+    }
+
+    const halfRange = (actualUpper - actualLower) / 2;
     setLayers((prev) => prev.map((l) => {
       const h = halfRange * l.rangeRatio;
-      return { ...l, upperPrice: +(center + h).toFixed(2), lowerPrice: +(center - h).toFixed(2) };
+      return { ...l, upperPrice: smartRound(center + h), lowerPrice: smartRound(center - h) };
     }));
   };
 
@@ -221,38 +271,66 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
 
   const handleCreate = () => {
     const baseAsset = symbol.replace('USDT', '');
-    const strategy: Strategy = {
-      name,
-      symbol,
-      baseAsset,
-      quoteAsset: 'USDT',
-      status: 'idle',
-      totalFund,
-      usedFund: 0,
-      rangeMode,
-      upperPrice,
-      lowerPrice,
-      centerPrice: currentPrice,
-      atrPeriod,
-      atrMultiplier,
-      layers,
-      profitAllocation,
-      profitRatio,
-      profitThreshold: 10,
-      trendSellAbovePercent: 10,
-      trendBuyBelowPercent: 10,
-      risk: defaultRisk,
-      autoRebalance,
-      rebalanceStepPercent: 5,
-      endMode,
-      totalProfit: 0,
-      todayProfit: 0,
-      totalTrades: 0,
-      winTrades: 0,
-      maxDrawdown: 0,
-      createdAt: Date.now(),
-    };
-    onCreated(strategy);
+    if (isEdit && editStrategy) {
+      const updated: Strategy = {
+        ...editStrategy,
+        name,
+        symbol,
+        baseAsset,
+        quoteAsset: 'USDT',
+        totalFund,
+        rangeMode,
+        upperPrice,
+        lowerPrice,
+        centerPrice: currentPrice || editStrategy.centerPrice,
+        atrPeriod,
+        atrMultiplier,
+        layers,
+        profitAllocation,
+        profitRatio,
+        profitThreshold: editStrategy.profitThreshold,
+        trendSellAbovePercent: editStrategy.trendSellAbovePercent,
+        trendBuyBelowPercent: editStrategy.trendBuyBelowPercent,
+        risk: editStrategy.risk,
+        autoRebalance,
+        rebalanceStepPercent: editStrategy.rebalanceStepPercent,
+        endMode,
+      };
+      onCreated(updated);
+    } else {
+      const strategy: Strategy = {
+        name,
+        symbol,
+        baseAsset,
+        quoteAsset: 'USDT',
+        status: 'idle',
+        totalFund,
+        usedFund: 0,
+        rangeMode,
+        upperPrice,
+        lowerPrice,
+        centerPrice: currentPrice,
+        atrPeriod,
+        atrMultiplier,
+        layers,
+        profitAllocation,
+        profitRatio,
+        profitThreshold: 10,
+        trendSellAbovePercent: 10,
+        trendBuyBelowPercent: 10,
+        risk: defaultRisk,
+        autoRebalance,
+        rebalanceStepPercent: 5,
+        endMode,
+        totalProfit: 0,
+        todayProfit: 0,
+        totalTrades: 0,
+        winTrades: 0,
+        maxDrawdown: 0,
+        createdAt: Date.now(),
+      };
+      onCreated(strategy);
+    }
   };
 
   const layerNames: Record<string, string> = { trend: t('strategy.layerFull.trend'), swing: t('strategy.layerFull.swing'), spike: t('strategy.layerFull.spike') };
@@ -270,7 +348,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
         {/* Header */}
         <div className={`flex items-center justify-between ${isMobile ? 'px-4 py-3' : 'p-6'} sticky top-0 z-10`} style={{ borderBottom: '1px solid rgba(51,65,85,0.3)', background: 'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(10,15,30,0.96) 100%)', backdropFilter: 'blur(12px)' }}>
           <div>
-            <h2 className={`${isMobile ? 'text-base' : 'text-xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>{t('creator.title')}</h2>
+            <h2 className={`${isMobile ? 'text-base' : 'text-xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>{isEdit ? t('creator.editTitle') : t('creator.title')}</h2>
             <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-0.5 font-medium`}>{t('creator.step', { current: step, total: 5 })}</p>
           </div>
           <button onClick={onCancel} className="p-2 rounded-xl text-slate-500 hover:text-slate-300 hover:bg-white/[0.04] transition-all">
@@ -449,6 +527,14 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
             <>
               <div ref={dropdownRef}>
                 <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>{t('creator.tradingPair')}</label>
+                {isEdit ? (
+                  <div className="input-field bg-slate-800/60 cursor-not-allowed flex items-center gap-2">
+                    <Search className="w-4 h-4 text-slate-500" />
+                    <span className="font-medium text-blue-400">{symbol.replace('USDT', '')}</span>
+                    <span className="text-slate-500">/USDT</span>
+                  </div>
+                ) : (
+                <>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                   <input
@@ -506,6 +592,8 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                       <div className="px-3 py-4 text-sm text-slate-500 text-center">{t('creator.noMatchPairs')}</div>
                     )}
                   </div>
+                )}
+                </>
                 )}
                 {symbol && currentPrice > 0 && (
                   <div className={`mt-2 flex ${isMobile ? 'flex-col gap-1' : 'items-center gap-4'} ${isMobile ? 'text-xs' : 'text-sm'}`}>
@@ -570,7 +658,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                       className={`p-3 rounded-lg border text-sm transition-colors ${
                         rangeMode === key ? 'border-blue-500 bg-blue-600/10 text-blue-400' : 'border-slate-700 hover:border-slate-600'
                       }`}
-                      onClick={() => { setRangeMode(key); setUpperPrice(0); setLowerPrice(0); updateLayerPrices(0, 0); }}
+                      onClick={() => { setRangeMode(key); setUpperPrice(0); setLowerPrice(0); setUpperPriceText(''); setLowerPriceText(''); updateLayerPrices(0, 0); }}
                     >
                       {label}
                     </button>
@@ -587,6 +675,8 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                       onClick={() => {
                         setUpperPrice(0);
                         setLowerPrice(0);
+                        setUpperPriceText('');
+                        setLowerPriceText('');
                         updateLayerPrices(0, 0);
                       }}
                     >
@@ -601,12 +691,16 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                         if (rangeMode === 'percentage') {
                           setUpperPrice(30);
                           setLowerPrice(-30);
+                          setUpperPriceText('30');
+                          setLowerPriceText('-30');
                           updateLayerPrices(-30, 30);
                         } else {
                           const up = +(entryPrice * 1.3).toFixed(2);
                           const low = +(entryPrice * 0.7).toFixed(2);
                           setUpperPrice(up);
                           setLowerPrice(low);
+                          setUpperPriceText(String(up));
+                          setLowerPriceText(String(low));
                           updateLayerPrices(low, up);
                         }
                       }}
@@ -620,11 +714,23 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                   <div className="relative">
                     <input
                       className={`input-field ${rangeMode === 'percentage' ? 'pr-8' : ''}`}
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       placeholder={t('creator.highest')}
-                      value={upperPrice || ''}
-                      onChange={(e) => { const v = Number(e.target.value); setUpperPrice(v); updateLayerPrices(lowerPrice, v); }}
+                      value={upperPriceText}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === '' || /^-?\d*\.?\d*$/.test(raw)) {
+                          setUpperPriceText(raw);
+                          const v = parseFloat(raw);
+                          if (!isNaN(v)) { setUpperPrice(v); updateLayerPrices(lowerPrice, v); }
+                        }
+                      }}
+                      onBlur={() => {
+                        const v = parseFloat(upperPriceText);
+                        if (!isNaN(v)) { setUpperPriceText(String(v)); setUpperPrice(v); updateLayerPrices(lowerPrice, v); }
+                        else { setUpperPriceText(''); setUpperPrice(0); }
+                      }}
                     />
                     {rangeMode === 'percentage' && (
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none">%</span>
@@ -633,11 +739,23 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                   <div className="relative">
                     <input
                       className={`input-field ${rangeMode === 'percentage' ? 'pr-8' : ''}`}
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       placeholder={t('creator.lowest')}
-                      value={lowerPrice || ''}
-                      onChange={(e) => { const v = Number(e.target.value); setLowerPrice(v); updateLayerPrices(v, upperPrice); }}
+                      value={lowerPriceText}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === '' || /^-?\d*\.?\d*$/.test(raw)) {
+                          setLowerPriceText(raw);
+                          const v = parseFloat(raw);
+                          if (!isNaN(v)) { setLowerPrice(v); updateLayerPrices(v, upperPrice); }
+                        }
+                      }}
+                      onBlur={() => {
+                        const v = parseFloat(lowerPriceText);
+                        if (!isNaN(v)) { setLowerPriceText(String(v)); setLowerPrice(v); updateLayerPrices(v, upperPrice); }
+                        else { setLowerPriceText(''); setLowerPrice(0); }
+                      }}
                     />
                     {rangeMode === 'percentage' && (
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none">%</span>
@@ -741,13 +859,15 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                             value={Math.round(layer.rangeRatio * 100)}
                             onChange={(e) => {
                               const ratio = Number(e.target.value) / 100;
-                              if (entryPrice > 0 && upperPrice > 0 && lowerPrice > 0) {
-                                const halfRange = (upperPrice - lowerPrice) / 2 * ratio;
+                              if (entryPrice > 0 && upperPrice !== 0 && lowerPrice !== 0) {
+                                const aU = rangeMode === 'percentage' ? entryPrice * (1 + upperPrice / 100) : upperPrice;
+                                const aL = rangeMode === 'percentage' ? entryPrice * (1 + lowerPrice / 100) : lowerPrice;
+                                const halfRange = (aU - aL) / 2 * ratio;
                                 const center = entryPrice;
                                 updateLayer(i, {
                                   rangeRatio: ratio,
-                                  upperPrice: +(center + halfRange).toFixed(2),
-                                  lowerPrice: +(center - halfRange).toFixed(2),
+                                  upperPrice: smartRound(center + halfRange),
+                                  lowerPrice: smartRound(center - halfRange),
                                 });
                               } else {
                                 updateLayer(i, { rangeRatio: ratio });
@@ -764,13 +884,15 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                               value={Math.round(layer.rangeRatio * 100)}
                               onChange={(e) => {
                                 const ratio = Math.min(200, Math.max(10, Number(e.target.value))) / 100;
-                                if (entryPrice > 0 && upperPrice > 0 && lowerPrice > 0) {
-                                  const halfRange = (upperPrice - lowerPrice) / 2 * ratio;
+                                if (entryPrice > 0 && upperPrice !== 0 && lowerPrice !== 0) {
+                                  const aU = rangeMode === 'percentage' ? entryPrice * (1 + upperPrice / 100) : upperPrice;
+                                  const aL = rangeMode === 'percentage' ? entryPrice * (1 + lowerPrice / 100) : lowerPrice;
+                                  const halfRange = (aU - aL) / 2 * ratio;
                                   const center = entryPrice;
                                   updateLayer(i, {
                                     rangeRatio: ratio,
-                                    upperPrice: +(center + halfRange).toFixed(2),
-                                    lowerPrice: +(center - halfRange).toFixed(2),
+                                    upperPrice: smartRound(center + halfRange),
+                                    lowerPrice: smartRound(center - halfRange),
                                   });
                                 } else {
                                   updateLayer(i, { rangeRatio: ratio });
@@ -780,34 +902,32 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
                             <span className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none">%</span>
                           </div>
                         </div>
-                        {/* Computed price display */}
+                        {/* Computed price display (read-only, auto-calculated) */}
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mb-0.5 block`}>{t('creator.upperBound')}</label>
-                            <input
-                              className="input-field text-sm"
-                              type="number"
-                              step="0.01"
-                              placeholder={t('creator.upperBound')}
-                              value={layer.upperPrice || ''}
-                              onChange={(e) => updateLayer(i, { upperPrice: Number(e.target.value) })}
-                            />
+                            <div className="input-field text-sm bg-slate-800/60 cursor-not-allowed text-slate-300">
+                              {layer.upperPrice > 0
+                                ? rangeMode === 'percentage' && entryPrice > 0
+                                  ? `$${smartPrice(layer.upperPrice)} (+${((layer.upperPrice - entryPrice) / entryPrice * 100).toFixed(1)}%)`
+                                  : `$${smartPrice(layer.upperPrice)}`
+                                : t('creator.setEntryRangeFirst')}
+                            </div>
                           </div>
                           <div>
                             <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mb-0.5 block`}>{t('creator.lowerBound')}</label>
-                            <input
-                              className="input-field text-sm"
-                              type="number"
-                              step="0.01"
-                              placeholder={t('creator.lowerBound')}
-                              value={layer.lowerPrice || ''}
-                              onChange={(e) => updateLayer(i, { lowerPrice: Number(e.target.value) })}
-                            />
+                            <div className="input-field text-sm bg-slate-800/60 cursor-not-allowed text-slate-300">
+                              {layer.lowerPrice > 0
+                                ? rangeMode === 'percentage' && entryPrice > 0
+                                  ? `$${smartPrice(layer.lowerPrice)} (${((layer.lowerPrice - entryPrice) / entryPrice * 100).toFixed(1)}%)`
+                                  : `$${smartPrice(layer.lowerPrice)}`
+                                : t('creator.setEntryRangeFirst')}
+                            </div>
                           </div>
                         </div>
                         {layer.upperPrice > 0 && layer.lowerPrice > 0 && layer.gridCount > 0 && (
                           <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mt-1`}>
-                            {t('creator.perGrid')} ≈ ${((layer.upperPrice - layer.lowerPrice) / layer.gridCount).toFixed(4)}
+                            {t('creator.perGrid')} ≈ ${smartPrice((layer.upperPrice - layer.lowerPrice) / layer.gridCount)}
                             <span className="mx-2">|</span>
                             {t('creator.width')} {((layer.upperPrice - layer.lowerPrice) / entryPrice * 100).toFixed(1)}%
                           </p>
@@ -1126,9 +1246,9 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
         <div className={`flex items-center justify-between ${isMobile ? 'px-4 py-3' : 'p-6'} sticky bottom-0`} style={{ borderTop: '1px solid rgba(51,65,85,0.3)', background: 'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(10,15,30,0.96) 100%)', backdropFilter: 'blur(12px)' }}>
           <button
             className="btn-secondary"
-            onClick={() => step > 1 ? setStep(step - 1) : onCancel()}
+            onClick={() => (isEdit ? step > 2 : step > 1) ? setStep(step - 1) : onCancel()}
           >
-            {step > 1 ? t('common.previous') : t('common.cancel')}
+            {(isEdit ? step > 2 : step > 1) ? t('common.previous') : t('common.cancel')}
           </button>
           {step < 5 ? (
             <button
@@ -1143,7 +1263,7 @@ export default function StrategyCreator({ onCreated, onCancel }: Props) {
             </button>
           ) : (
             <button className="btn-success" onClick={handleCreate}>
-              {t('creator.createStrategy')}
+              {isEdit ? t('creator.saveChanges') : t('creator.createStrategy')}
             </button>
           )}
         </div>
