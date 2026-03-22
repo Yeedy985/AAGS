@@ -36,10 +36,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // ==================== 移动端布局 ====================
   if (isMobile) {
     return (
-      <div className="flex flex-col h-screen h-[100dvh] overflow-hidden">
-        {/* Mobile Header */}
+      <div className="fixed inset-0 flex flex-col bg-[#020617]">
+        {/* Mobile Header - fixed top */}
         <header
-          className="flex items-center justify-between px-4 shrink-0"
+          className="flex items-center justify-between px-4 shrink-0 z-30"
           style={{
             height: 'calc(48px + env(safe-area-inset-top, 0px))',
             paddingTop: 'env(safe-area-inset-top, 0px)',
@@ -74,8 +74,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* Mobile Main Content */}
-        <main className="flex-1 overflow-auto">
+        {/* Mobile Main Content - scrollable middle */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
           <div className="px-3 py-3">
             {children}
           </div>
@@ -121,9 +121,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        {/* Mobile Bottom Navigation */}
+        {/* Mobile Bottom Navigation - fixed bottom */}
         <nav
-          className="shrink-0 flex items-end"
+          className="shrink-0 z-30"
           style={{
             background: 'linear-gradient(180deg, rgba(10,15,28,0.98) 0%, rgba(6,8,15,1) 100%)',
             borderTop: '1px solid rgba(51,65,85,0.3)',

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AAGS</string>
+    <string name="title_activity_main">AAGS</string>
+    <string name="package_name">com.aags.grid.trading</string>
+    <string name="custom_url_scheme">com.aags.grid.trading</string>
+</resources>
