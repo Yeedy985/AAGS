@@ -671,7 +671,8 @@
     "checkingElectron": "正在检查更新...",
     "downloadingElectron": "正在下载更新...",
     "alreadyLatest": "已经是最新版本",
-    "updatingWeb": "正在更新，页面即将刷新..."
+    "updatingWeb": "正在更新，页面即将刷新...",
+    "hotUpdate": "⚡ 自动更新"
   },
   "sentiment": {
     "title": "Sentinel-X 信号监控",

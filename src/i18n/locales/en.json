@@ -671,7 +671,8 @@
     "checkingElectron": "Checking for updates...",
     "downloadingElectron": "Downloading update...",
     "alreadyLatest": "Already up to date",
-    "updatingWeb": "Updating, page will refresh..."
+    "updatingWeb": "Updating, page will refresh...",
+    "hotUpdate": "⚡ Auto Update"
   },
   "sentiment": {
     "title": "Sentinel-X Signal Monitor",

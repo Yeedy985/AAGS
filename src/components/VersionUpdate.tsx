@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Download, CheckCircle, AlertCircle, Loader2, RefreshCw, Tag, Clock, FileText, ArrowUpCircle, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Download, CheckCircle, AlertCircle, Loader2, RefreshCw, Tag, Clock, FileText, ArrowUpCircle, ExternalLink, Zap } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useIsMobile } from '../hooks/useIsMobile';
 
@@ -20,7 +20,7 @@ interface GitHubRelease {
 
 const GITHUB_OWNER = 'Yeedy985';
 const GITHUB_REPO = 'AAGS';
-const CURRENT_VERSION = '1.0.1';
+const CURRENT_VERSION = '1.0.2';
 
 function parseVersion(v: string): number[] {
   return v.replace(/^v/, '').split('.').map(Number);
@@ -324,18 +324,31 @@ export default function VersionUpdate() {
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 ml-1`}>{t('version.noChangelog')}</p>
                   )}
 
-                  {/* Download EXE link (doesn't interfere with web update) */}
-                  {exeAsset && (
-                    <div className={`mt-3 flex items-center gap-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>
-                      <a
-                        href={exeAsset.browser_download_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 text-slate-500 hover:text-cyan-400 transition-colors"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        {t('version.downloadExe')} ({formatBytes(exeAsset.size)})
-                      </a>
+                  {/* Download EXE + Hot Update */}
+                  {(exeAsset || (isLatest && !isCurrent)) && (
+                    <div className={`mt-3 flex items-center gap-4 flex-wrap ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                      {exeAsset && (
+                        <a
+                          href={exeAsset.browser_download_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-slate-500 hover:text-cyan-400 transition-colors"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          {t('version.downloadExe')} ({formatBytes(exeAsset.size)})
+                        </a>
+                      )}
+                      {isLatest && !isCurrent && (
+                        <button
+                          onClick={handleUpdate}
+                          disabled={updating}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600/80 to-teal-600/80 text-white font-medium hover:from-emerald-500 hover:to-teal-500 transition-all shadow-sm shadow-emerald-500/15 disabled:opacity-50"
+                        >
+                          {updating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                          {t('version.hotUpdate')}
+                        </button>
+                      )}
+                      {updateMsg && <span className="text-cyan-400">{updateMsg}</span>}
                     </div>
                   )}
                 </div>

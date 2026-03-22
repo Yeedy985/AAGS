@@ -24,12 +24,36 @@ export default function Settings() {
 
   const handleExport = async () => {
     try {
+      // 导出所有 IndexedDB 表
       const data = {
         apiConfigs: await db.apiConfigs.toArray(),
         strategies: await db.strategies.toArray(),
         gridOrders: await db.gridOrders.toArray(),
         tradeRecords: await db.tradeRecords.toArray(),
         equitySnapshots: await db.equitySnapshots.toArray(),
+        signalDefinitions: await db.signalDefinitions.toArray(),
+        signalEvents: await db.signalEvents.toArray(),
+        scoringResults: await db.scoringResults.toArray(),
+        eventAlerts: await db.eventAlerts.toArray(),
+        llmConfigs: await db.llmConfigs.toArray(),
+        notificationConfigs: await db.notificationConfigs.toArray(),
+        publicServiceConfigs: await db.publicServiceConfigs.toArray(),
+        scanBriefings: await db.scanBriefings.toArray(),
+        scanFailures: await db.scanFailures.toArray(),
+        tradeContexts: await db.tradeContexts.toArray(),
+        // 导出 localStorage 设置
+        localStorage: {
+          aags_language: localStorage.getItem('aags_language'),
+          aags_active_tab: localStorage.getItem('aags_active_tab'),
+          aags_enc_key: localStorage.getItem('aags_enc_key'),
+          aags_share_codes: localStorage.getItem('aags_share_codes'),
+          aags_min_display_value: localStorage.getItem('aags_min_display_value'),
+          aags_push_settings: localStorage.getItem('aags_push_settings'),
+          aags_report_mode: localStorage.getItem('aags_report_mode'),
+          aags_auto_scan: localStorage.getItem('aags_auto_scan'),
+          'aags-refresh-intervals': localStorage.getItem('aags-refresh-intervals'),
+        },
+        exportVersion: '1.0.2',
         exportTime: Date.now(),
       };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -56,25 +80,47 @@ export default function Settings() {
       try {
         const text = await file.text();
         const data = JSON.parse(text);
-        if (data.strategies) {
-          await db.strategies.clear();
-          await db.strategies.bulkAdd(data.strategies.map((s: any) => { const { id, ...rest } = s; return rest; }));
+        const strip = (arr: any[]) => arr.map((item: any) => { const { id, ...rest } = item; return rest; });
+
+        // 恢复所有 IndexedDB 表
+        const tables: { key: string; table: any }[] = [
+          { key: 'apiConfigs', table: db.apiConfigs },
+          { key: 'strategies', table: db.strategies },
+          { key: 'gridOrders', table: db.gridOrders },
+          { key: 'tradeRecords', table: db.tradeRecords },
+          { key: 'equitySnapshots', table: db.equitySnapshots },
+          { key: 'signalDefinitions', table: db.signalDefinitions },
+          { key: 'signalEvents', table: db.signalEvents },
+          { key: 'scoringResults', table: db.scoringResults },
+          { key: 'eventAlerts', table: db.eventAlerts },
+          { key: 'llmConfigs', table: db.llmConfigs },
+          { key: 'notificationConfigs', table: db.notificationConfigs },
+          { key: 'publicServiceConfigs', table: db.publicServiceConfigs },
+          { key: 'scanBriefings', table: db.scanBriefings },
+          { key: 'scanFailures', table: db.scanFailures },
+          { key: 'tradeContexts', table: db.tradeContexts },
+        ];
+
+        for (const { key, table } of tables) {
+          if (data[key] && Array.isArray(data[key]) && data[key].length > 0) {
+            await table.clear();
+            await table.bulkAdd(strip(data[key]));
+          }
         }
-        if (data.gridOrders) {
-          await db.gridOrders.clear();
-          await db.gridOrders.bulkAdd(data.gridOrders.map((o: any) => { const { id, ...rest } = o; return rest; }));
+
+        // 恢复 localStorage 设置
+        if (data.localStorage && typeof data.localStorage === 'object') {
+          for (const [k, v] of Object.entries(data.localStorage)) {
+            if (v !== null && v !== undefined) {
+              localStorage.setItem(k, v as string);
+            }
+          }
         }
-        if (data.tradeRecords) {
-          await db.tradeRecords.clear();
-          await db.tradeRecords.bulkAdd(data.tradeRecords.map((t: any) => { const { id, ...rest } = t; return rest; }));
-        }
-        if (data.equitySnapshots) {
-          await db.equitySnapshots.clear();
-          await db.equitySnapshots.bulkAdd(data.equitySnapshots.map((s: any) => { const { id, ...rest } = s; return rest; }));
-        }
+
         setExportMsg(t('common.success'));
+        setTimeout(() => window.location.reload(), 1500);
       } catch (err: any) {
-      setExportMsg(`${t('common.failed')}: ${err.message}`);
+        setExportMsg(`${t('common.failed')}: ${err.message}`);
       }
     };
     input.click();
@@ -254,7 +300,7 @@ export default function Settings() {
         <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold`}>{t('settings.about')}</h3>
         <div className="text-sm text-slate-400 space-y-1">
           <p><span className="text-slate-300">{t('settings.aboutName')}:</span> Apex Adaptive Grid System</p>
-          <p><span className="text-slate-300">{t('settings.aboutVersion')}:</span> 1.0.1</p>
+          <p><span className="text-slate-300">{t('settings.aboutVersion')}:</span> 1.0.2</p>
           <p><span className="text-slate-300">{t('settings.aboutPosition')}:</span> {t('settings.aboutPositionDesc')}</p>
           <p><span className="text-slate-300">{t('settings.aboutGoal')}:</span> {t('settings.aboutGoalDesc')}</p>
         </div>
