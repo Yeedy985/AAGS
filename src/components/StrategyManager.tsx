@@ -85,6 +85,21 @@ export default function StrategyManager() {
     (async () => {
       for (const s of strategies) {
         if (s.id) {
+          // 从未启动的策略：清理可能被污染的数据 + 跳过修复
+          if (s.status === 'idle' && !s.startedAt) {
+            const dirtyOrders = await db.gridOrders.where('strategyId').equals(s.id).count();
+            const dirtyTrades = await db.tradeRecords.where('strategyId').equals(s.id).count();
+            if (dirtyOrders > 0 || dirtyTrades > 0) {
+              console.warn(`[清理] 策略${s.id}从未启动但有${dirtyOrders}个gridOrders和${dirtyTrades}条tradeRecords，正在清理...`);
+              await db.gridOrders.where('strategyId').equals(s.id).delete();
+              await db.tradeRecords.where('strategyId').equals(s.id).delete();
+              await db.equitySnapshots.where('strategyId').equals(s.id).delete();
+              await db.strategies.update(s.id, { totalProfit: 0, todayProfit: 0, totalTrades: 0, winTrades: 0 });
+              const fresh = await db.strategies.get(s.id);
+              if (fresh) updateStrategy(fresh);
+            }
+            continue;
+          }
           try {
             await repairMissingTradeRecords(s.id, apiConfig);
             await updateStrategyProfit(s.id);
@@ -444,8 +459,10 @@ export default function StrategyManager() {
             const perGridQty = s.totalFund > 0 && totalGridCount > 0 && latestPrice > 0
               ? (s.totalFund / totalGridCount / latestPrice)
               : 0;
+            // 从未启动的策略：不计算任何盈亏数据
+            const neverStarted = s.status === 'idle' && !s.startedAt;
             // 浮动盈亏: 从网格订单计算未平仓持仓的盈亏
-            const strategyOrders = allGridOrders.filter(o => o.strategyId === s.id && o.status === 'filled');
+            const strategyOrders = neverStarted ? [] : allGridOrders.filter(o => o.strategyId === s.id && o.status === 'filled');
             const filledBuys = strategyOrders.filter(o => o.side === 'buy');
             const filledSells = strategyOrders.filter(o => o.side === 'sell');
             // 找出未被卖出匹配的买入订单 = 当前持仓
@@ -465,9 +482,9 @@ export default function StrategyManager() {
                 costBasis += buy.price * (buy.filledQuantity || buy.quantity);
               }
             }
-            const unrealizedPnl = latestPrice > 0 ? (holdingQty * latestPrice - costBasis) : 0;
+            const unrealizedPnl = neverStarted ? 0 : (latestPrice > 0 ? (holdingQty * latestPrice - costBasis) : 0);
             const unrealizedPct = s.totalFund > 0 ? (unrealizedPnl / s.totalFund * 100) : 0;
-            const gridProfit = s.totalProfit;
+            const gridProfit = neverStarted ? 0 : s.totalProfit;
             const totalReturn = gridProfit + unrealizedPnl;
             const totalReturnPct = s.totalFund > 0 ? (totalReturn / s.totalFund * 100) : 0;
             const profitPct = s.totalFund > 0 ? (gridProfit / s.totalFund * 100) : 0;
@@ -507,7 +524,11 @@ export default function StrategyManager() {
                   </div>
                   <div>
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{isMobile ? t('strategy.priceRangeShort') : t('strategy.priceRange')}</p>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold`}>{s.lowerPrice.toFixed(isMobile ? 2 : 5)} - {s.upperPrice.toFixed(isMobile ? 2 : 5)}</p>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold`}>{(() => {
+                      const low = s.rangeMode === 'percentage' && s.centerPrice > 0 ? s.centerPrice * (1 + s.lowerPrice / 100) : s.lowerPrice;
+                      const high = s.rangeMode === 'percentage' && s.centerPrice > 0 ? s.centerPrice * (1 + s.upperPrice / 100) : s.upperPrice;
+                      return `${low.toFixed(isMobile ? 2 : 5)} - ${high.toFixed(isMobile ? 2 : 5)}`;
+                    })()}</p>
                   </div>
                   <div>
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{t('strategy.gridCount')}</p>
@@ -561,6 +582,7 @@ export default function StrategyManager() {
                   <div>
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-0.5`}>{t('strategy.matchPair')}</p>
                     {(() => {
+                      if (neverStarted) return <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold`}>0{t('strategy.trades')} / 0{t('strategy.pairs')}</p>;
                       const trades = allTradeRecords.filter(t => t.strategyId === s.id);
                       // FIFO 配对: 和 updateStrategyProfit 保持一致
                       const pairGroups = new Map<string, typeof trades>();
@@ -592,7 +614,7 @@ export default function StrategyManager() {
 
                 {/* === Order Stats Tabs === */}
                 {(() => {
-                  const orders = allGridOrders.filter(o => o.strategyId === s.id);
+                  const orders = neverStarted ? [] : allGridOrders.filter(o => o.strategyId === s.id);
                   const placedCount = orders.filter(o => o.status === 'placed').length;
                   const filledCount = orders.filter(o => o.status === 'filled').length;
                   const activeTab = orderTab[s.id!] || null;

@@ -277,6 +277,11 @@ export async function repairMissingTradeRecords(strategyId: number, apiConfig: A
   const strategy = await db.strategies.get(strategyId);
   if (!strategy) return;
 
+  // 从未启动的策略不需要修复，避免拉取交易所数据污染到未启动的策略
+  if (strategy.status === 'idle' || !strategy.startedAt) {
+    return;
+  }
+
   // 确保交易所已设置
   setCurrentExchange(apiConfig.exchange || 'binance');
 
@@ -1147,6 +1152,11 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
 export async function updateStrategyProfit(strategyId: number, forceSnapshot = false) {
   const strategy = await db.strategies.get(strategyId);
   if (!strategy) return;
+
+  // 从未启动的策略不需要计算利润
+  if (strategy.status === 'idle' && !strategy.startedAt) {
+    return;
+  }
 
   const trades = await db.tradeRecords.where('strategyId').equals(strategyId).toArray();
   const filledOrders = await db.gridOrders
