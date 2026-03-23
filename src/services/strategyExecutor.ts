@@ -1,7 +1,7 @@
 import { db } from '../db';
-import { placeOrder, getPrice, cancelOrder, setCurrentExchange, getKlines, queryOrder, getAllOrders, getExchangeInfo, getMyTrades } from './binance';
+import { placeOrder, getPrice, cancelOrder, setCurrentExchange, getKlines, queryOrder, getAllOrders, getExchangeInfo, getMyTrades, getOpenOrders } from './binance';
 import { generateGridOrders, detectTrend, formatQuantity, formatPrice } from './gridEngine';
-import { syncStrategyData } from './strategyPlazaService';
+import { syncStrategyData, sendHeartbeat } from './strategyPlazaService';
 import type { Strategy, GridOrder, ApiConfig, SymbolInfo } from '../types';
 
 // ==================== 执行引擎状态 ====================
@@ -14,6 +14,8 @@ const _executors: Map<number, ExecutorState> = new Map();
 const _checkLocks: Map<number, boolean> = new Map(); // 防并发锁
 const _lastPlazaSync: Map<number, number> = new Map(); // 策略广场上次同步时间
 const PLAZA_SYNC_INTERVAL = 5 * 60 * 1000; // 每 5 分钟同步一次
+const _lastHeartbeat: Map<number, number> = new Map(); // 策略广场上次心跳时间
+const HEARTBEAT_INTERVAL = 2 * 60 * 1000; // 每 2 分钟发送一次心跳
 const _lastGridIntegrityCheck: Map<number, number> = new Map(); // 网格完整性上次检查时间
 const GRID_INTEGRITY_INTERVAL = 60 * 1000; // 每 60 秒做一次完整网格补齐检查
 let _onStrategyUpdate: ((strategy: Strategy) => void) | null = null;
@@ -186,11 +188,9 @@ export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, sy
   startMonitorLoop(strategy.id, apiConfig, symbolInfo);
 }
 
-// ==================== 策略广场同步 ====================
+// ==================== 策略广场同步 + 心跳 ====================
 async function maybeSyncToPlaza(strategyId: number) {
   const now = Date.now();
-  const lastSync = _lastPlazaSync.get(strategyId) || 0;
-  if (now - lastSync < PLAZA_SYNC_INTERVAL) return;
 
   // 检查本地是否有分享记录
   let shareCodes: Record<string, string> = {};
@@ -201,6 +201,17 @@ async function maybeSyncToPlaza(strategyId: number) {
 
   const shareCode = shareCodes[strategyId];
   if (!shareCode) return;
+
+  // --- 心跳: 每 2 分钟发送一次 (独立于数据同步) ---
+  const lastHb = _lastHeartbeat.get(strategyId) || 0;
+  if (now - lastHb >= HEARTBEAT_INTERVAL) {
+    sendHeartbeat(shareCode); // fire-and-forget, 不 await
+    _lastHeartbeat.set(strategyId, now);
+  }
+
+  // --- 数据同步: 每 5 分钟同步一次 ---
+  const lastSync = _lastPlazaSync.get(strategyId) || 0;
+  if (now - lastSync < PLAZA_SYNC_INTERVAL) return;
 
   const strategy = await db.strategies.get(strategyId);
   if (!strategy) return;
@@ -220,6 +231,7 @@ async function maybeSyncToPlaza(strategyId: number) {
       isRunning: strategy.status === 'running',
     });
     _lastPlazaSync.set(strategyId, now);
+    _lastHeartbeat.set(strategyId, now); // sync 也算一次心跳
     log(strategyId, `[策略广场] 收益数据已同步`);
   } catch (err: any) {
     // 同步失败不影响策略运行，静默处理
@@ -1283,24 +1295,64 @@ export async function stopStrategy(strategyId: number, apiConfig: ApiConfig): Pr
 
   setCurrentExchange(apiConfig.exchange || 'binance');
 
+  // === 第一步: 取消本地 DB 中记录的挂单 ===
   const placedOrders = await db.gridOrders
     .where('strategyId').equals(strategyId)
     .filter(o => o.status === 'placed' && !!o.binanceOrderId)
     .toArray();
 
   let cancelledCount = 0;
+  const cancelledIds = new Set<string>();
   for (const order of placedOrders) {
     try {
       await cancelOrder(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, order.binanceOrderId!);
-      await db.gridOrders.update(order.id!, { status: 'cancelled', updatedAt: Date.now() });
+      cancelledIds.add(order.binanceOrderId!);
       cancelledCount++;
     } catch {
-      // 忽略取消失败
+      // 忽略取消失败（可能已成交或已取消）
     }
+    await db.gridOrders.update(order.id!, { status: 'cancelled', updatedAt: Date.now() });
     await sleep(200);
   }
 
-  log(strategyId, `已取消 ${cancelledCount} 个挂单`);
+  log(strategyId, `本地记录取消: ${cancelledCount} 个`);
+
+  // === 第二步: 收集本策略所有历史 binanceOrderId，在交易所挂单中匹配并取消残留 ===
+  try {
+    // 从本地 DB 获取本策略所有曾经下过的订单 ID（不限状态）
+    const allStrategyOrders = await db.gridOrders
+      .where('strategyId').equals(strategyId)
+      .filter(o => !!o.binanceOrderId)
+      .toArray();
+    const strategyOrderIds = new Set(allStrategyOrders.map(o => o.binanceOrderId!));
+
+    // 查询交易所该币对当前所有挂单
+    const exchangeOpenOrders = await getOpenOrders(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol);
+    if (exchangeOpenOrders && exchangeOpenOrders.length > 0) {
+      let extraCancelled = 0;
+      for (const eo of exchangeOpenOrders) {
+        const oid = String(eo.orderId || eo.order_id || eo.id || '');
+        if (!oid || cancelledIds.has(oid)) continue; // 已经取消过的跳过
+        // 只取消属于本策略的挂单
+        if (!strategyOrderIds.has(oid)) continue;
+        try {
+          await cancelOrder(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, oid);
+          extraCancelled++;
+        } catch {
+          // 忽略
+        }
+        await sleep(200);
+      }
+      if (extraCancelled > 0) {
+        log(strategyId, `交易所残留取消: ${extraCancelled} 个`);
+        cancelledCount += extraCancelled;
+      }
+    }
+  } catch (err: any) {
+    log(strategyId, `查询交易所挂单失败: ${err.message}，仅取消了本地记录的挂单`);
+  }
+
+  log(strategyId, `共取消 ${cancelledCount} 个挂单`);
 
   // 更新策略状态
   await db.strategies.update(strategyId, { status: 'stopped', stoppedAt: Date.now() });
@@ -1331,6 +1383,16 @@ export async function stopStrategy(strategyId: number, apiConfig: ApiConfig): Pr
   } catch (err: any) {
     console.warn(`[策略广场] 停止同步失败:`, err.message);
   }
+}
+
+// ==================== 停止策略（不取消挂单） ====================
+export async function stopStrategyWithoutCancel(strategyId: number): Promise<void> {
+  log(strategyId, '直接终止策略（保留交易所挂单）...');
+  stopMonitorLoop(strategyId);
+
+  await db.strategies.update(strategyId, { status: 'stopped', stoppedAt: Date.now() });
+  const stopped = await db.strategies.get(strategyId);
+  if (stopped) _onStrategyUpdate?.(stopped);
 }
 
 // ==================== 暂停策略 ====================

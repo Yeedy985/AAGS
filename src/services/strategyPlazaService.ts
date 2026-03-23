@@ -174,6 +174,15 @@ export async function unshareStrategy(shareCode: string): Promise<void> {
   if (!res.success) throw new Error(res.error || '取消分享失败');
 }
 
+// ── 心跳 (需登录) ──
+export async function sendHeartbeat(shareCode: string): Promise<void> {
+  try {
+    await apiRequest(`/api/strategy/${shareCode}/heartbeat`, { method: 'POST' });
+  } catch {
+    // 心跳失败不影响策略运行
+  }
+}
+
 // ── 记录复制 (公开) ──
 export async function recordCopy(shareCode: string): Promise<void> {
   await publicRequest(`/api/strategy/${shareCode}/copy`, { method: 'POST' });

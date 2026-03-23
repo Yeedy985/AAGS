@@ -8,7 +8,7 @@ import type { Strategy } from '../types';
 import StrategyCreator from './StrategyCreator';
 import StrategyDetail from './StrategyDetail';
 import StrategyPlaza from './StrategyPlaza';
-import { startStrategy, stopStrategy, pauseStrategy, resumeStrategy, setExecutorCallbacks, updateStrategyProfit, repairMissingTradeRecords, syncAllStrategiesOrders } from '../services/strategyExecutor';
+import { startStrategy, stopStrategy, stopStrategyWithoutCancel, pauseStrategy, resumeStrategy, setExecutorCallbacks, updateStrategyProfit, repairMissingTradeRecords, syncAllStrategiesOrders } from '../services/strategyExecutor';
 import { shareStrategy, unshareStrategy } from '../services/strategyPlazaService';
 import { useIsMobile } from '../hooks/useIsMobile';
 
@@ -39,6 +39,7 @@ export default function StrategyManager() {
   const [orderTab, setOrderTab] = useState<Record<number, 'placed' | 'filled' | 'pending' | null>>({});
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [stopConfirm, setStopConfirm] = useState<{ strategy: Strategy; orderCount: number } | null>(null);
 
   // 实时查询所有策略的 gridOrders
   const allGridOrders = useLiveQuery(
@@ -138,11 +139,32 @@ export default function StrategyManager() {
     setOperatingIds(prev => { const n = new Set(prev); n.delete(strategy.id!); return n; });
   };
 
-  const handleStop = async (strategy: Strategy) => {
+  const handleStop = (strategy: Strategy) => {
     if (!apiConfig) return;
+    const orderCount = allGridOrders.filter(o => o.strategyId === strategy.id && o.status === 'placed' && !!o.binanceOrderId).length;
+    setStopConfirm({ strategy, orderCount });
+  };
+
+  const handleStopConfirmCancel = async () => {
+    if (!stopConfirm || !apiConfig) return;
+    const { strategy } = stopConfirm;
+    setStopConfirm(null);
     setOperatingIds(prev => new Set(prev).add(strategy.id!));
     try {
       await stopStrategy(strategy.id!, apiConfig);
+    } catch (err: any) {
+      setErrors(prev => ({ ...prev, [strategy.id!]: err.message }));
+    }
+    setOperatingIds(prev => { const n = new Set(prev); n.delete(strategy.id!); return n; });
+  };
+
+  const handleStopWithoutCancel = async () => {
+    if (!stopConfirm) return;
+    const { strategy } = stopConfirm;
+    setStopConfirm(null);
+    setOperatingIds(prev => new Set(prev).add(strategy.id!));
+    try {
+      await stopStrategyWithoutCancel(strategy.id!);
     } catch (err: any) {
       setErrors(prev => ({ ...prev, [strategy.id!]: err.message }));
     }
@@ -902,6 +924,52 @@ export default function StrategyManager() {
           <StrategyPlaza onCopyStrategy={handleCopyFromPlaza} />
         </div>
       </div>
+      {/* 终止策略确认弹窗 */}
+      {stopConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setStopConfirm(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className={`relative ${isMobile ? 'mx-4 p-5' : 'p-6'} rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl max-w-md w-full`}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-white mb-3">{t('strategy.stopConfirmTitle')}</h3>
+            <p className="text-sm text-slate-300 mb-2">
+              {t('strategy.stopConfirmName')}: <span className="text-white font-medium">{stopConfirm.strategy.name}</span>
+            </p>
+            <p className="text-sm text-slate-300 mb-1">
+              {t('strategy.stopConfirmSymbol')}: <span className="text-yellow-400 font-medium">{stopConfirm.strategy.symbol}</span>
+            </p>
+            <p className="text-sm text-slate-300 mb-1">
+              {t('strategy.stopConfirmOrders')}: <span className="text-blue-400 font-bold">{stopConfirm.orderCount}</span> {t('strategy.stopConfirmOrdersUnit')}
+            </p>
+            {stopConfirm.orderCount > 0 && (
+              <p className="text-sm text-amber-400/80 mb-4">
+                ⏱ {t('strategy.stopConfirmEstimate', { seconds: Math.max(5, Math.ceil(stopConfirm.orderCount * 0.3)) })}
+              </p>
+            )}
+            <div className="flex flex-col gap-2 mt-4">
+              <button
+                onClick={handleStopConfirmCancel}
+                className="w-full py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium text-sm transition-colors"
+              >
+                {t('strategy.stopConfirmCancelOrders')}
+              </button>
+              <button
+                onClick={handleStopWithoutCancel}
+                className="w-full py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm transition-colors"
+              >
+                {t('strategy.stopConfirmKeepOrders')}
+              </button>
+              <button
+                onClick={() => setStopConfirm(null)}
+                className="w-full py-2 rounded-lg text-slate-500 hover:text-slate-300 text-sm transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
