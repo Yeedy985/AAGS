@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Download, CheckCircle, AlertCircle, Loader2, RefreshCw, Tag, Clock, FileText, ArrowUpCircle, ExternalLink, Zap } from 'lucide-react';
 import { useStore } from '../store/useStore';
@@ -20,7 +20,7 @@ interface GitHubRelease {
 
 const GITHUB_OWNER = 'Yeedy985';
 const GITHUB_REPO = 'AAGS';
-const CURRENT_VERSION = '1.0.2';
+const FALLBACK_VERSION = '1.0.3';
 
 function parseVersion(v: string): number[] {
   return v.replace(/^v/, '').split('.').map(Number);
@@ -93,8 +93,41 @@ export default function VersionUpdate() {
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState(false);
   const [updateMsg, setUpdateMsg] = useState('');
+  const [currentVersion, setCurrentVersion] = useState(FALLBACK_VERSION);
+  const [hotUpdateProgress, setHotUpdateProgress] = useState<{ stage: string; percent: number } | null>(null);
+  const versionLoaded = useRef(false);
 
   const isElectron = typeof window !== 'undefined' && !!window.electronAPI?.isElectron;
+
+  // 动态获取当前前端版本（Electron 热更新后版本可能变化）
+  useEffect(() => {
+    if (versionLoaded.current) return;
+    versionLoaded.current = true;
+    (async () => {
+      if (isElectron && window.electronAPI?.getFrontendVersion) {
+        try {
+          const v = await window.electronAPI.getFrontendVersion();
+          if (v) setCurrentVersion(v);
+        } catch { /* fallback */ }
+      }
+    })();
+  }, [isElectron]);
+
+  // 监听热更新进度
+  useEffect(() => {
+    if (!isElectron || !window.electronAPI?.onHotUpdateProgress) return;
+    const cleanup = window.electronAPI.onHotUpdateProgress((data) => {
+      setHotUpdateProgress({ stage: data.stage, percent: data.percent || 0 });
+      if (data.stage === 'done') {
+        setUpdateMsg('✅ ' + (isZh ? '热更新完成，正在刷新...' : 'Hot update done, refreshing...'));
+        setTimeout(() => {
+          setHotUpdateProgress(null);
+          setUpdating(false);
+        }, 2000);
+      }
+    });
+    return cleanup;
+  }, [isElectron, isZh]);
 
   const fetchReleases = useCallback(async () => {
     setLoading(true);
@@ -114,48 +147,55 @@ export default function VersionUpdate() {
     fetchReleases();
   }, [fetchReleases]);
 
-  const latestVersion = releases.length > 0 ? releases[0].tag_name.replace(/^v/, '') : CURRENT_VERSION;
-  const hasUpdate = isNewer(latestVersion, CURRENT_VERSION);
+  const latestVersion = releases.length > 0 ? releases[0].tag_name.replace(/^v/, '') : currentVersion;
+  const hasUpdate = isNewer(latestVersion, currentVersion);
+
+  // Electron 热更新（只替换前端资源，不需要重新安装）
+  const handleHotUpdate = async () => {
+    if (!isElectron || !window.electronAPI?.performHotUpdate) return;
+    setUpdating(true);
+    setUpdateMsg(isZh ? '正在检查热更新...' : 'Checking hot update...');
+    setHotUpdateProgress({ stage: 'downloading', percent: 0 });
+    try {
+      const res = await window.electronAPI.performHotUpdate();
+      if (res.status === 'ok') {
+        setUpdateMsg(`✅ ${isZh ? '已更新到' : 'Updated to'} v${res.version}`);
+        // 主进程会自动刷新页面
+      } else {
+        setUpdateMsg(`❌ ${res.message || 'Unknown error'}`);
+        setHotUpdateProgress(null);
+        setUpdating(false);
+      }
+    } catch (err: any) {
+      setUpdateMsg(`❌ ${err.message}`);
+      setHotUpdateProgress(null);
+      setUpdating(false);
+    }
+  };
 
   const handleUpdate = async () => {
-    if (isElectron) {
-      setUpdating(true);
-      setUpdateMsg(t('version.checkingElectron'));
-      try {
-        const res = await window.electronAPI!.checkForUpdate();
-        if (res.status === 'ok' && res.version) {
-          setUpdateMsg(t('version.downloadingElectron'));
-          await window.electronAPI!.downloadUpdate();
-        } else {
-          setUpdateMsg(t('version.alreadyLatest'));
-          setTimeout(() => setUpdateMsg(''), 3000);
-        }
-      } catch (err: any) {
-        setUpdateMsg(`❌ ${err.message}`);
-      }
-      setUpdating(false);
-    } else {
-      // Web/PWA: reload to get latest version from service worker
-      setUpdating(true);
-      setUpdateMsg(t('version.updatingWeb'));
-      // Unregister service worker and reload
-      if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (const reg of registrations) {
-          await reg.unregister();
-        }
-      }
-      // Clear caches
-      if ('caches' in window) {
-        const keys = await caches.keys();
-        for (const key of keys) {
-          await caches.delete(key);
-        }
-      }
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
+    // Electron: 优先使用热更新
+    if (isElectron && window.electronAPI?.performHotUpdate) {
+      return handleHotUpdate();
     }
+    // Web/PWA: reload to get latest version from service worker
+    setUpdating(true);
+    setUpdateMsg(t('version.updatingWeb'));
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const reg of registrations) {
+        await reg.unregister();
+      }
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      for (const key of keys) {
+        await caches.delete(key);
+      }
+    }
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
   };
 
   return (
@@ -173,7 +213,7 @@ export default function VersionUpdate() {
             {t('version.title')}
           </h1>
           <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-0.5`}>
-            {t('version.currentVersion')}: v{CURRENT_VERSION}
+            {t('version.currentVersion')}: v{currentVersion}
           </p>
         </div>
       </div>
@@ -195,16 +235,35 @@ export default function VersionUpdate() {
               <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-400 mb-3`}>
                 {t('version.updateDesc')}
               </p>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleUpdate}
-                  disabled={updating}
-                  className={`flex items-center gap-2 ${isMobile ? 'px-4 py-2 text-xs' : 'px-5 py-2.5 text-sm'} rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-semibold hover:from-cyan-500 hover:to-blue-500 transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50`}
-                >
-                  {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  {t('version.updateNow')}
-                </button>
-                {updateMsg && <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-cyan-400`}>{updateMsg}</span>}
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleUpdate}
+                    disabled={updating}
+                    className={`flex items-center gap-2 ${isMobile ? 'px-4 py-2 text-xs' : 'px-5 py-2.5 text-sm'} rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-semibold hover:from-cyan-500 hover:to-blue-500 transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50`}
+                  >
+                    {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    {t('version.updateNow')}
+                  </button>
+                  {updateMsg && <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-cyan-400`}>{updateMsg}</span>}
+                </div>
+                {/* 热更新进度条 */}
+                {hotUpdateProgress && (
+                  <div className="space-y-1.5">
+                    <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300"
+                        style={{ width: `${hotUpdateProgress.percent}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {hotUpdateProgress.stage === 'downloading' && (isZh ? `正在下载资源包... ${hotUpdateProgress.percent}%` : `Downloading resources... ${hotUpdateProgress.percent}%`)}
+                      {hotUpdateProgress.stage === 'extracting' && (isZh ? '正在解压...' : 'Extracting...')}
+                      {hotUpdateProgress.stage === 'replacing' && (isZh ? '正在替换文件...' : 'Replacing files...')}
+                      {hotUpdateProgress.stage === 'done' && (isZh ? '✅ 更新完成，正在刷新...' : '✅ Done, refreshing...')}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -263,7 +322,7 @@ export default function VersionUpdate() {
           <div className="divide-y divide-slate-700/30">
             {releases.map((release, idx) => {
               const version = release.tag_name.replace(/^v/, '');
-              const isCurrent = version === CURRENT_VERSION;
+              const isCurrent = version === currentVersion;
               const isLatest = idx === 0;
               const items = parseChangelog(release.body);
               const exeAsset = release.assets.find(a => a.name.endsWith('.exe'));

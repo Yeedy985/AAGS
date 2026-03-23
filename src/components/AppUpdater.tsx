@@ -14,6 +14,21 @@ interface UpdateStatus {
   releaseNotes?: string;
 }
 
+interface HotUpdateProgress {
+  stage: 'downloading' | 'extracting' | 'replacing' | 'done';
+  percent?: number;
+  downloaded?: number;
+  total?: number;
+}
+
+interface HotUpdateCheckResult {
+  hasUpdate: boolean;
+  currentVersion?: string;
+  remoteVersion?: string;
+  zipSize?: number;
+  error?: string;
+}
+
 interface ElectronAPI {
   isElectron: boolean;
   getAppVersion: () => Promise<string>;
@@ -21,6 +36,11 @@ interface ElectronAPI {
   downloadUpdate: () => Promise<{ status: string; message?: string }>;
   installUpdate: () => void;
   onUpdateStatus: (callback: (data: UpdateStatus) => void) => () => void;
+  // Hot-update APIs
+  getFrontendVersion: () => Promise<string>;
+  checkHotUpdate: () => Promise<HotUpdateCheckResult>;
+  performHotUpdate: () => Promise<{ status: string; version?: string; message?: string }>;
+  onHotUpdateProgress: (callback: (data: HotUpdateProgress) => void) => () => void;
 }
 
 declare global {

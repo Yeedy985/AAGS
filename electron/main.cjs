@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
+const { checkHotUpdate, performHotUpdate, getCurrentFrontendVersion } = require('./hot-update.cjs');
 
 const isDev = !app.isPackaged;
 let mainWindow = null;
@@ -87,6 +88,42 @@ ipcMain.handle('install-update', () => {
 
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
+});
+
+// ==================== Hot Update IPC ====================
+ipcMain.handle('get-frontend-version', () => {
+  if (isDev) return app.getVersion();
+  return getCurrentFrontendVersion();
+});
+
+ipcMain.handle('check-hot-update', async () => {
+  if (isDev) return { hasUpdate: false, currentVersion: 'dev' };
+  try {
+    return await checkHotUpdate();
+  } catch (err) {
+    return { hasUpdate: false, error: err.message };
+  }
+});
+
+ipcMain.handle('perform-hot-update', async () => {
+  if (isDev) return { status: 'dev' };
+  try {
+    const sendProgress = (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('hot-update-progress', data);
+      }
+    };
+    const result = await performHotUpdate(sendProgress);
+    // 热更新完成后刷新页面
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+      }
+    }, 500);
+    return { status: 'ok', version: result.version };
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
 });
 
 // ==================== Window ====================
