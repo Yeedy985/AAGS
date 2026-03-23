@@ -95,6 +95,7 @@ export default function VersionUpdate() {
   const [updateMsg, setUpdateMsg] = useState('');
   const [currentVersion, setCurrentVersion] = useState(FALLBACK_VERSION);
   const [hotUpdateProgress, setHotUpdateProgress] = useState<{ stage: string; percent: number } | null>(null);
+  const [hotUpdateNeedFullUpdate, setHotUpdateNeedFullUpdate] = useState(false);
   const versionLoaded = useRef(false);
 
   const isElectron = typeof window !== 'undefined' && !!window.electronAPI?.isElectron;
@@ -162,12 +163,24 @@ export default function VersionUpdate() {
         setUpdateMsg(`✅ ${isZh ? '已更新到' : 'Updated to'} v${res.version}`);
         // 主进程会自动刷新页面
       } else {
-        setUpdateMsg(`❌ ${res.message || 'Unknown error'}`);
+        const msg = res.message || 'Unknown error';
+        if (msg.includes('replace dist') || msg.includes('ENOENT') || msg.includes('Access')) {
+          setUpdateMsg(`⚠️ ${isZh ? '当前版本不支持热更新，请下载最新安装包升级' : 'This version does not support hot update, please download the latest installer'}`);
+          setHotUpdateNeedFullUpdate(true);
+        } else {
+          setUpdateMsg(`❌ ${msg}`);
+        }
         setHotUpdateProgress(null);
         setUpdating(false);
       }
     } catch (err: any) {
-      setUpdateMsg(`❌ ${err.message}`);
+      const msg = err.message || 'Unknown error';
+      if (msg.includes('replace dist') || msg.includes('ENOENT') || msg.includes('Access')) {
+        setUpdateMsg(`⚠️ ${isZh ? '当前版本不支持热更新，请下载最新安装包升级' : 'This version does not support hot update, please download the latest installer'}`);
+        setHotUpdateNeedFullUpdate(true);
+      } else {
+        setUpdateMsg(`❌ ${msg}`);
+      }
       setHotUpdateProgress(null);
       setUpdating(false);
     }
@@ -264,6 +277,28 @@ export default function VersionUpdate() {
                     </p>
                   </div>
                 )}
+                {/* 当前版本不支持热更新，需要下载完整安装包 */}
+                {hotUpdateNeedFullUpdate && releases.length > 0 && (() => {
+                  const exeAsset = releases[0].assets.find(a => a.name.endsWith('.exe') && !a.name.endsWith('.blockmap'));
+                  const downloadUrl = exeAsset?.browser_download_url || releases[0].html_url;
+                  return (
+                    <div className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                      <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-amber-400 mb-2`}>
+                        {isZh ? '⚠️ 当前客户端版本过低，不支持热更新。请下载最新安装包手动升级。' : '⚠️ Current client version is too old for hot update. Please download the latest installer.'}
+                      </p>
+                      <a
+                        href={downloadUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-2 ${isMobile ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold transition-all`}
+                      >
+                        <Download className="w-4 h-4" />
+                        {isZh ? `下载 AAGS v${latestVersion} 安装包` : `Download AAGS v${latestVersion} Installer`}
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
