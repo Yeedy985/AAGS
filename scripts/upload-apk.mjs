@@ -1,5 +1,5 @@
 /**
- * 上传 Android APK 到已有的 GitHub Release v1.0.2
+ * 上传 Android APK 到已有的 GitHub Release v1.0.3
  * 用法: GH_TOKEN=xxx node scripts/upload-apk.mjs
  */
 import fs from 'fs';
@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TOKEN = process.env.GH_TOKEN;
 const OWNER = 'Yeedy985';
 const REPO = 'AAGS';
-const TAG = 'v1.0.2';
+const TAG = 'v1.0.3';
 
 async function main() {
   if (!TOKEN) {
@@ -19,14 +19,14 @@ async function main() {
     process.exit(1);
   }
 
-  const apkPath = path.resolve(__dirname, '..', 'release', 'AAGS-1.0.2.apk');
+  const apkPath = path.resolve(__dirname, '..', 'release', 'AAGS-1.0.3.apk');
   if (!fs.existsSync(apkPath)) {
     console.error('ERROR: APK not found at', apkPath);
     process.exit(1);
   }
 
   const apkBuffer = fs.readFileSync(apkPath);
-  console.log(`Found: AAGS-1.0.2.apk (${(apkBuffer.length / 1024 / 1024).toFixed(1)} MB)`);
+  console.log(`Found: AAGS-1.0.3.apk (${(apkBuffer.length / 1024 / 1024).toFixed(1)} MB)`);
 
   // 获取已有 Release
   console.log(`Finding release for tag ${TAG}...`);
@@ -46,8 +46,8 @@ async function main() {
   console.log(`Release found: ${release.html_url}`);
 
   // 上传 APK
-  const uploadUrl = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent('AAGS-1.0.2.apk')}`);
-  console.log('Uploading AAGS-1.0.2.apk...');
+  const uploadUrl = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent('AAGS-1.0.3.apk')}`);
+  console.log('Uploading AAGS-1.0.3.apk...');
 
   const uploadRes = await fetch(uploadUrl, {
     method: 'POST',

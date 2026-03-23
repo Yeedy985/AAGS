@@ -1,5 +1,5 @@
 /**
- * 上传 macOS dmg 到已有的 GitHub Release v1.0.2
+ * 上传 macOS dmg 到已有的 GitHub Release v1.0.3
  * 用法: GH_TOKEN=xxx node scripts/upload-dmg.mjs
  */
 import fs from 'fs';
@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TOKEN = process.env.GH_TOKEN;
 const OWNER = 'Yeedy985';
 const REPO = 'AAGS';
-const TAG = 'v1.0.2';
+const TAG = 'v1.0.3';
 
 async function main() {
   if (!TOKEN) {

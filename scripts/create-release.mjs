@@ -7,9 +7,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TOKEN = process.env.GH_TOKEN;
 const OWNER = 'Yeedy985';
 const REPO = 'AAGS';
-const TAG = 'v1.0.2';
-const NAME = 'v1.0.2';
-const BODY = `## v1.0.2
+const TAG = 'v1.0.3';
+const NAME = 'v1.0.3';
+const BODY = `## v1.0.3
 
 - ✨ 新增版本热更新功能，支持 Web/PWA 一键自动更新
 - ✨ 版本更新页面每个版本新增「自动更新」按钮
@@ -19,7 +19,7 @@ const BODY = `## v1.0.2
 - 🐛 修复导入未恢复交易所API配置的问题
 `;
 
-const EXE_PATH = path.resolve(__dirname, '..', 'release', 'AAGS Setup 1.0.2.exe');
+const EXE_PATH = path.resolve(__dirname, '..', 'release', 'AAGS Setup 1.0.3.exe');
 
 async function main() {
   if (!TOKEN) {
@@ -108,11 +108,11 @@ async function main() {
   }
 
   // Step 4: Upload blockmap for delta updates
-  const blockmapPath = path.resolve(__dirname, '..', 'release', 'AAGS Setup 1.0.2.exe.blockmap');
+  const blockmapPath = path.resolve(__dirname, '..', 'release', 'AAGS Setup 1.0.3.exe.blockmap');
   if (fs.existsSync(blockmapPath)) {
     console.log('Uploading blockmap...');
     const bmBuffer = fs.readFileSync(blockmapPath);
-    const bmUploadUrl = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent('AAGS Setup 1.0.2.exe.blockmap')}`);
+    const bmUploadUrl = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent('AAGS Setup 1.0.3.exe.blockmap')}`);
     const bmRes = await fetch(bmUploadUrl, {
       method: 'POST',
       headers: {
