@@ -35,7 +35,8 @@
           ]
         }
       ],
-      "icon": "public/icon.ico"
+      "icon": "public/icon.ico",
+      "artifactName": "AAGS-Setup-${version}.${ext}"
     },
     "mac": {
       "target": [

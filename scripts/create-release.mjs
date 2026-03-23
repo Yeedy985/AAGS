@@ -18,7 +18,7 @@ const BODY = `## v1.0.3
 - 🐛 修复百分比模式创建策略时价格范围显示不正确的问题
 `;
 
-const EXE_PATH = path.resolve(__dirname, '..', 'release', 'AAGS Setup 1.0.3.exe');
+const EXE_PATH = path.resolve(__dirname, '..', 'release', 'AAGS-Setup-1.0.3.exe');
 
 async function main() {
   if (!TOKEN) {
@@ -107,11 +107,11 @@ async function main() {
   }
 
   // Step 4: Upload blockmap for delta updates
-  const blockmapPath = path.resolve(__dirname, '..', 'release', 'AAGS Setup 1.0.3.exe.blockmap');
+  const blockmapPath = path.resolve(__dirname, '..', 'release', 'AAGS-Setup-1.0.3.exe.blockmap');
   if (fs.existsSync(blockmapPath)) {
     console.log('Uploading blockmap...');
     const bmBuffer = fs.readFileSync(blockmapPath);
-    const bmUploadUrl = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent('AAGS Setup 1.0.3.exe.blockmap')}`);
+    const bmUploadUrl = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent('AAGS-Setup-1.0.3.exe.blockmap')}`);
     const bmRes = await fetch(bmUploadUrl, {
       method: 'POST',
       headers: {
