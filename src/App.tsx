@@ -16,6 +16,7 @@ import { db } from './db';
 import { getTicker24h, getAccountInfo, getPrice, setCurrentExchange } from './services/binance';
 import { getExchangeConfig } from './services/exchangeConfig';
 import { setExecutorCallbacks, syncAllStrategiesOrders } from './services/strategyExecutor';
+import { startHeartbeatService } from './services/heartbeatService';
 
 function App() {
   const { activeTab, setStrategies, setApiConfig, apiConfig, setIsConnected, setTickers, setAccountInfo, refreshIntervals, updateStrategy, symbols } = useStore();
@@ -139,6 +140,11 @@ function App() {
     const timer = setInterval(loadTickers, 30000);
     return () => clearInterval(timer);
   }, [loadTickers]);
+
+  // 启动后台心跳服务：只要 AAGS 打开就持续为已分享策略发送心跳，不依赖页面可见
+  useEffect(() => {
+    startHeartbeatService();
+  }, []);
 
   const renderPage = () => {
     switch (activeTab) {

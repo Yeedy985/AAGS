@@ -1,25 +1,26 @@
 /**
  * Electron 前端资源热更新模块
  * 
- * 原理: Electron 壳不变，只替换 dist/ 中的前端资源文件
- * 流程: 检查 GitHub Release 上的 hot-update.json → 对比版本 → 下载 dist-update.zip → 解压替换 → 刷新窗口
+ * 原理: Electron 壳（app.asar）不变，热更新的 dist 放到 userData/hot-dist/ 目录
+ *       main.cjs 启动时通过 getLoadPath() 决定加载哪个 index.html:
+ *       - 如果 userData/hot-dist/index.html 存在 → 加载它（热更新版本）
+ *       - 否则 → 回退加载 asar 内的 dist/index.html（原始版本）
+ * 
+ * 流程: 检查 hot-update.json → 对比版本 → 下载 dist-update.zip → 解压到 hot-dist/ → 刷新窗口
  */
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
-const { createWriteStream, mkdirSync, existsSync, rmSync, renameSync, readFileSync, writeFileSync } = fs;
+const { createWriteStream, mkdirSync, existsSync, rmSync, readFileSync, writeFileSync, cpSync } = fs;
 
 const GITHUB_OWNER = 'Yeedy985';
 const GITHUB_REPO = 'AAGS';
 
-// 获取 dist 目录路径（打包后在 resources/app/dist）
-function getDistPath() {
+// 热更新 dist 存放目录: userData/hot-dist/
+function getHotDistPath() {
   const { app } = require('electron');
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'app', 'dist');
-  }
-  return path.join(__dirname, '..', 'dist');
+  return path.join(app.getPath('userData'), 'hot-dist');
 }
 
 // 获取热更新临时目录
@@ -32,6 +33,21 @@ function getTempPath() {
 function getLocalVersionPath() {
   const { app } = require('electron');
   return path.join(app.getPath('userData'), 'hot-update-version.json');
+}
+
+// 获取应该加载的 index.html 路径
+// 优先热更新目录，回退 asar 内 dist
+function getLoadPath() {
+  const { app } = require('electron');
+  if (app.isPackaged) {
+    const hotDist = getHotDistPath();
+    const hotIndex = path.join(hotDist, 'index.html');
+    if (existsSync(hotIndex)) {
+      return hotIndex;
+    }
+  }
+  // 回退: asar 内或开发模式
+  return path.join(__dirname, '..', 'dist', 'index.html');
 }
 
 // 获取当前前端版本（优先读热更新版本，否则用 app 版本）
@@ -55,7 +71,6 @@ function httpGet(url, options = {}) {
       headers: { 'User-Agent': 'AAGS-Updater' },
       ...options,
     }, (res) => {
-      // 跟随重定向
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         return httpGet(res.headers.location, options).then(resolve).catch(reject);
       }
@@ -70,7 +85,7 @@ function httpGet(url, options = {}) {
   });
 }
 
-// 下载文件到本地，返回 Promise，支持进度回调
+// 下载文件到本地，支持进度回调
 function downloadFile(url, destPath, onProgress) {
   return new Promise(async (resolve, reject) => {
     try {
@@ -113,8 +128,6 @@ async function checkHotUpdate() {
     });
 
     const info = JSON.parse(body);
-    // info = { version: "1.0.3", zipFile: "dist-update.zip", zipSize: 12345, sha256: "..." }
-
     const hasUpdate = isNewer(info.version, currentVersion);
     return {
       hasUpdate,
@@ -151,6 +164,7 @@ async function performHotUpdate(onProgress) {
 
   const tempDir = getTempPath();
   const zipPath = path.join(tempDir, 'dist-update.zip');
+  const hotDistPath = getHotDistPath();
 
   // 清理临时目录
   if (existsSync(tempDir)) rmSync(tempDir, { recursive: true, force: true });
@@ -166,46 +180,31 @@ async function performHotUpdate(onProgress) {
 
   onProgress?.({ stage: 'extracting', percent: 0 });
 
-  // 2. 解压 zip（使用 Node.js 内置的 zlib + 简单的 zip 解压）
+  // 2. 解压 zip
   await extractZip(zipPath, tempDir);
 
   onProgress?.({ stage: 'replacing', percent: 50 });
 
-  // 3. 替换 dist 目录
-  const distPath = getDistPath();
+  // 3. 找到解压后的 dist 目录
   const extractedDist = path.join(tempDir, 'dist');
-
-  // 验证解压结果
   if (!existsSync(extractedDist) || !existsSync(path.join(extractedDist, 'index.html'))) {
     throw new Error('Invalid update package: dist/index.html not found');
   }
 
-  // 备份旧 dist
-  const backupPath = distPath + '.backup';
-  if (existsSync(backupPath)) rmSync(backupPath, { recursive: true, force: true });
-
-  try {
-    // 重命名当前 dist 为 backup
-    renameSync(distPath, backupPath);
-    // 将新 dist 移入
-    renameSync(extractedDist, distPath);
-    // 删除备份
-    rmSync(backupPath, { recursive: true, force: true });
-  } catch (err) {
-    // 回滚: 恢复备份
-    if (existsSync(backupPath) && !existsSync(distPath)) {
-      renameSync(backupPath, distPath);
-    }
-    throw new Error(`Failed to replace dist: ${err.message}`);
+  // 4. 替换 hot-dist 目录（在 userData 中，完全可写）
+  if (existsSync(hotDistPath)) {
+    rmSync(hotDistPath, { recursive: true, force: true });
   }
+  // 复制解压后的 dist 到 hot-dist
+  cpSync(extractedDist, hotDistPath, { recursive: true });
 
-  // 4. 记录新版本
+  // 5. 记录新版本
   writeFileSync(getLocalVersionPath(), JSON.stringify({
     version: checkResult.remoteVersion,
     updatedAt: new Date().toISOString(),
   }));
 
-  // 5. 清理临时文件
+  // 6. 清理临时文件
   try { rmSync(tempDir, { recursive: true, force: true }); } catch { /* ignore */ }
 
   onProgress?.({ stage: 'done', percent: 100 });
@@ -213,11 +212,9 @@ async function performHotUpdate(onProgress) {
   return { version: checkResult.remoteVersion };
 }
 
-// 简单的 ZIP 解压实现（使用 AdmZip，electron-builder 自带 Node.js）
+// ZIP 解压
 async function extractZip(zipPath, destDir) {
-  // 尝试使用 yauzl（更可靠）或回退到 shell 命令
   try {
-    // 使用 PowerShell 解压 (Windows)
     const { execSync } = require('child_process');
     if (process.platform === 'win32') {
       execSync(`powershell -NoProfile -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force"`, {
@@ -225,7 +222,6 @@ async function extractZip(zipPath, destDir) {
       });
       return;
     }
-    // macOS / Linux
     execSync(`unzip -o "${zipPath}" -d "${destDir}"`, { timeout: 60000 });
   } catch (err) {
     throw new Error(`Failed to extract zip: ${err.message}`);
@@ -236,4 +232,5 @@ module.exports = {
   checkHotUpdate,
   performHotUpdate,
   getCurrentFrontendVersion,
+  getLoadPath,
 };

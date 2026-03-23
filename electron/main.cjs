@@ -1,7 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
-const { checkHotUpdate, performHotUpdate, getCurrentFrontendVersion } = require('./hot-update.cjs');
+const { checkHotUpdate, performHotUpdate, getCurrentFrontendVersion, getLoadPath } = require('./hot-update.cjs');
 
 const isDev = !app.isPackaged;
 let mainWindow = null;
@@ -114,10 +114,10 @@ ipcMain.handle('perform-hot-update', async () => {
       }
     };
     const result = await performHotUpdate(sendProgress);
-    // 热更新完成后刷新页面
+    // 热更新完成后刷新页面（从 userData/hot-dist/ 加载）
     setTimeout(() => {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+        mainWindow.loadFile(getLoadPath());
       }
     }, 500);
     return { status: 'ok', version: result.version };
@@ -154,7 +154,7 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    mainWindow.loadFile(getLoadPath());
   }
 }
 
