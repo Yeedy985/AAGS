@@ -1,5 +1,6 @@
 /**
- * 修复 GitHub Release v1.0.3: 删除旧文件名的 assets，上传新文件名的 assets
+ * 上传 EXE / blockmap / latest.yml 到 GitHub Release
+ * 自动从 package.json 读取版本号
  */
 import fs from 'fs';
 import path from 'path';
@@ -9,7 +10,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TOKEN = process.env.GH_TOKEN;
 const OWNER = 'Yeedy985';
 const REPO = 'AAGS';
-const TAG = 'v1.0.3';
+const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf-8'));
+const VERSION = pkg.version;
+const TAG = `v${VERSION}`;
 
 async function main() {
   if (!TOKEN) { console.error('ERROR: GH_TOKEN required'); process.exit(1); }
@@ -22,7 +25,8 @@ async function main() {
   console.log(`Release: ${release.tag_name}, ${release.assets.length} assets`);
 
   // 2. 删除旧的 EXE, blockmap, latest.yml
-  const toDelete = ['AAGS.Setup.1.0.3.exe', 'AAGS.Setup.1.0.3.exe.blockmap', 'latest.yml'];
+  const exeName = `AAGS-Setup-${VERSION}.exe`;
+  const toDelete = [exeName, `${exeName}.blockmap`, `AAGS.Setup.${VERSION}.exe`, `AAGS.Setup.${VERSION}.exe.blockmap`, 'latest.yml'];
   for (const asset of release.assets) {
     if (toDelete.includes(asset.name)) {
       console.log(`Deleting: ${asset.name} (${asset.id})...`);
@@ -35,11 +39,11 @@ async function main() {
   }
 
   // 3. 上传新的 EXE
-  const exePath = path.resolve(__dirname, '..', 'release', 'AAGS-Setup-1.0.3.exe');
+  const exePath = path.resolve(__dirname, '..', 'release', exeName);
   if (fs.existsSync(exePath)) {
     const buf = fs.readFileSync(exePath);
-    console.log(`Uploading AAGS-Setup-1.0.3.exe (${(buf.length / 1024 / 1024).toFixed(1)} MB)...`);
-    const url = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent('AAGS-Setup-1.0.3.exe')}`);
+    console.log(`Uploading ${exeName} (${(buf.length / 1024 / 1024).toFixed(1)} MB)...`);
+    const url = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent(exeName)}`);
     const upRes = await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/octet-stream', Accept: 'application/vnd.github+json' },
@@ -49,11 +53,11 @@ async function main() {
   }
 
   // 4. 上传新的 blockmap
-  const bmPath = path.resolve(__dirname, '..', 'release', 'AAGS-Setup-1.0.3.exe.blockmap');
+  const bmPath = path.resolve(__dirname, '..', 'release', `${exeName}.blockmap`);
   if (fs.existsSync(bmPath)) {
     const buf = fs.readFileSync(bmPath);
     console.log('Uploading blockmap...');
-    const url = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent('AAGS-Setup-1.0.3.exe.blockmap')}`);
+    const url = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent(`${exeName}.blockmap`)}`);
     const upRes = await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/octet-stream', Accept: 'application/vnd.github+json' },
