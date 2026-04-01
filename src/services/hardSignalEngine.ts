@@ -26,21 +26,22 @@
 import type { SignalEvent, SignalGroup } from '../types';
 import { getLang } from './langUtil';
 
-const isDev = import.meta.env.DEV;
+const _isElectronHS = typeof window !== 'undefined' && !!(window as any).electronAPI;
+const _useProxyHS = import.meta.env.DEV || !_isElectronHS;
 const _zh = () => getLang() === 'zh';
 
 // ==================== API URL Helpers ====================
 function binanceFuturesUrl(path: string): string {
-  return isDev ? `/proxy/binance-futures${path}` : `https://fapi.binance.com${path}`;
+  return _useProxyHS ? `/proxy/binance-futures${path}` : `https://fapi.binance.com${path}`;
 }
 function binanceSpotUrl(path: string): string {
-  return isDev ? `/proxy/binance${path}` : `https://api.binance.com${path}`;
+  return _useProxyHS ? `/proxy/binance${path}` : `https://api.binance.com${path}`;
 }
 function alternativeUrl(path: string): string {
-  return isDev ? `/dataapi/alternative${path}` : `https://api.alternative.me${path}`;
+  return _useProxyHS ? `/dataapi/alternative${path}` : `https://api.alternative.me${path}`;
 }
 function coingeckoUrl(path: string): string {
-  return isDev ? `/dataapi/coingecko${path}` : `https://api.coingecko.com${path}`;
+  return _useProxyHS ? `/dataapi/coingecko${path}` : `https://api.coingecko.com${path}`;
 }
 
 // ==================== 原始数据类型 ====================
@@ -533,7 +534,7 @@ async function fetchStablecoinMarketCap(): Promise<number | null> {
 }
 
 function defillamaUrl(path: string): string {
-  return isDev ? `/dataapi/defillama${path}` : `https://api.llama.fi${path}`;
+  return _useProxyHS ? `/dataapi/defillama${path}` : `https://api.llama.fi${path}`;
 }
 
 async function fetchDefiTVL(): Promise<number | null> {

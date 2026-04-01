@@ -19,14 +19,16 @@ import type {
 import { notifyAlert } from './notificationService';
 import { collectAndEvaluateHardSignals } from './hardSignalEngine';
 
-const isDev = import.meta.env.DEV;
+const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
+// Web 环境（包括生产构建）需要走代理，只有 Electron 生产环境才直连
+const useProxy = import.meta.env.DEV || !isElectron;
 
 // ==================== Proxy 解析 ====================
 function resolveServiceUrl(serverUrl: string, path: string): string {
   const base = serverUrl.replace(/\/+$/, '');
   const fullUrl = `${base}${path}`;
-  if (!isDev) return fullUrl;
-  // dev 模式走 Vite proxy
+  if (!useProxy) return fullUrl;
+  // Web 环境走代理绕过 CORS
   try {
     const url = new URL(fullUrl);
     return `/scanapi${url.pathname}${url.search}`;

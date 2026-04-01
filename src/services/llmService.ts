@@ -362,7 +362,8 @@ ${signalList}
 
 // ==================== Dev Proxy URL 解析 ====================
 
-const isDev = import.meta.env.DEV;
+const _isElectronLLM = typeof window !== 'undefined' && !!(window as any).electronAPI;
+const _useProxyLLM = import.meta.env.DEV || !_isElectronLLM;
 
 
 
@@ -384,7 +385,7 @@ const LLM_PROXY_MAP: Record<string, string> = {
 
 function resolveApiUrl(originalUrl: string): string {
 
-  if (!isDev) return originalUrl;
+  if (!_useProxyLLM) return originalUrl;
 
   for (const [origin, proxyPath] of Object.entries(LLM_PROXY_MAP)) {
 

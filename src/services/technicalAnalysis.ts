@@ -100,10 +100,11 @@ export interface TechnicalSnapshot {
 
 // ==================== K 线获取 (Binance API) ====================
 
-const isDev = import.meta.env.DEV;
+const _isElectronTA = typeof window !== 'undefined' && !!(window as any).electronAPI;
+const _useProxyTA = import.meta.env.DEV || !_isElectronTA;
 
 function binanceSpotUrl(path: string): string {
-  return isDev ? `/proxy/binance${path}` : `https://api.binance.com${path}`;
+  return _useProxyTA ? `/proxy/binance${path}` : `https://api.binance.com${path}`;
 }
 
 /**

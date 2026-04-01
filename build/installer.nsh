@@ -1,18 +1,29 @@
 !macro customInit
-  ; ===== 安装前强制关闭所有 AAGS 相关进程 =====
-  ; 方法1: taskkill 强制杀
-  nsExec::ExecToLog 'taskkill /f /im "AAGS.exe"'
-  ; 方法2: wmic 兜底
-  nsExec::ExecToLog 'wmic process where "name='"'"'AAGS.exe'"'"'" call terminate'
-  ; 方法3: PowerShell 最终兜底（杀掉所有匹配进程）
-  nsExec::ExecToLog 'powershell -NoProfile -Command "Get-Process -Name AAGS -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue"'
-  ; 等待文件锁释放
+  ; 1. 强制杀掉所有 AAGS 进程
+  nsExec::ExecToLog 'taskkill /f /t /im "AAGS.exe"'
   Sleep 2000
+  nsExec::ExecToLog 'taskkill /f /t /im "AAGS.exe"'
+  Sleep 1000
+
+  ; 2. 手动静默运行旧卸载器（进程已死，不会弹窗）
+  IfFileExists "$PROGRAMFILES\AAGS\Uninstall AAGS.exe" 0 +3
+    ExecWait '"$PROGRAMFILES\AAGS\Uninstall AAGS.exe" /S /allusers _?=$PROGRAMFILES\AAGS'
+    Sleep 2000
+  IfFileExists "$LOCALAPPDATA\Programs\aags\Uninstall AAGS.exe" 0 +3
+    ExecWait '"$LOCALAPPDATA\Programs\aags\Uninstall AAGS.exe" /S /currentuser _?=$LOCALAPPDATA\Programs\aags'
+    Sleep 2000
+
+  ; 3. 再杀一轮（卸载器可能启动了 AAGS）
+  nsExec::ExecToLog 'taskkill /f /t /im "AAGS.exe"'
+  Sleep 1000
+
+  ; 4. 强制删除残留目录
+  RMDir /r "$PROGRAMFILES\AAGS"
+  RMDir /r "$LOCALAPPDATA\Programs\aags"
 !macroend
 
-; ===== 覆盖内置的"应用正在运行"检查，跳过弹窗直接杀进程 =====
 !macro customCheckAppRunning
-  ; 再次确保进程已死
-  nsExec::ExecToLog 'taskkill /f /im "AAGS.exe"'
-  Sleep 500
+  ; 安全网：确保进程已死
+  nsExec::ExecToLog 'taskkill /f /t /im "AAGS.exe"'
+  Sleep 1000
 !macroend

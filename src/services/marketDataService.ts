@@ -5,7 +5,8 @@
 
 import { getLang as _getLang, getLocale as _getLocale } from './langUtil';
 
-const isDev = import.meta.env.DEV;
+const _isElectronMD = typeof window !== 'undefined' && !!(window as any).electronAPI;
+const _useProxyMD = import.meta.env.DEV || !_isElectronMD;
 
 // ==================== 类型定义 ====================
 export interface MarketNews {
@@ -50,7 +51,7 @@ export interface MarketDataSnapshot {
 
 // ==================== Proxy helpers ====================
 function proxyUrl(url: string): string {
-  if (!isDev) return url;
+  if (!_useProxyMD) return url;
   // CryptoCompare
   if (url.startsWith('https://min-api.cryptocompare.com')) {
     return url.replace('https://min-api.cryptocompare.com', '/dataapi/cryptocompare');
