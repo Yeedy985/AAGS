@@ -31,6 +31,9 @@ interface RequestOptions {
 }
 
 const isDev = import.meta.env.DEV;
+const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
+// Web 环境（包括生产构建）需要走代理，只有 Electron 生产环境才直连
+const useProxy = isDev || !isElectron;
 
 // 每个交易所独立的服务器时间偏移校正（毫秒）
 const _timeOffsets: Record<string, number> = {};
@@ -45,8 +48,8 @@ async function syncServerTime(): Promise<void> {
   if (_timeSynced[exchangeId]) return;
   if (!_currentConfig.serverTimePath) return;
   try {
-    const basePath = isDev && _currentConfig.proxyPath ? _currentConfig.proxyPath : _currentConfig.baseUrl;
-    const url = isDev && _currentConfig.proxyPath
+    const basePath = useProxy && _currentConfig.proxyPath ? _currentConfig.proxyPath : _currentConfig.baseUrl;
+    const url = useProxy && _currentConfig.proxyPath
       ? new URL(`${basePath}${_currentConfig.serverTimePath}`, window.location.origin)
       : new URL(`${basePath}${_currentConfig.serverTimePath}`);
     const before = Date.now();
@@ -77,17 +80,17 @@ function getCorrectedTimestamp(): number {
 async function request<T>(options: RequestOptions): Promise<T> {
   const { method = 'GET', endpoint, params = {}, signed = false, apiKey, apiSecretEncrypted, baseUrl } = options;
 
-  // 开发环境使用 Vite proxy 绕过 CORS, 生产环境直连
+  // Web 环境（dev + 生产）使用代理绕过 CORS，Electron 生产环境直连
   let effectiveBaseUrl: string;
   if (baseUrl) {
     effectiveBaseUrl = baseUrl;
-  } else if (isDev && _currentConfig.proxyPath) {
+  } else if (useProxy && _currentConfig.proxyPath) {
     effectiveBaseUrl = _currentConfig.proxyPath;
   } else {
     effectiveBaseUrl = _currentConfig.baseUrl;
   }
 
-  const url = isDev && !baseUrl
+  const url = useProxy && !baseUrl
     ? new URL(`${effectiveBaseUrl}${endpoint}`, window.location.origin)
     : new URL(`${effectiveBaseUrl}${endpoint}`);
   const searchParams = new URLSearchParams();
