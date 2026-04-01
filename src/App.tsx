@@ -11,6 +11,7 @@ import EventAlertPage from './components/EventAlert';
 import Settings from './components/Settings';
 import VersionUpdate from './components/VersionUpdate';
 import AppUpdater from './components/AppUpdater';
+import UpdateBanner from './components/UpdateBanner';
 import { useStore } from './store/useStore';
 import { db } from './db';
 import { getTicker24h, getAccountInfo, getPrice, setCurrentExchange } from './services/binance';
@@ -164,6 +165,7 @@ function App() {
 
   return (
     <>
+      <UpdateBanner />
       <Layout>
         {renderPage()}
       </Layout>

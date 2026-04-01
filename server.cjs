@@ -12,6 +12,7 @@ const url = require('url');
 
 const PORT = parseInt(process.argv.find((_, i, a) => a[i - 1] === '--port') || '8080');
 const DIST_DIR = path.join(__dirname, 'dist');
+const PKG_VERSION = require('./package.json').version;
 
 // ==================== 代理路由配置（与 vite.config.ts 保持一致）====================
 const PROXY_RULES = [
@@ -166,6 +167,13 @@ const server = http.createServer((req, res) => {
       'Access-Control-Max-Age': '86400',
     });
     res.end();
+    return;
+  }
+
+  // 版本接口
+  if (req.url === '/api/version') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({ version: PKG_VERSION }));
     return;
   }
 
