@@ -53,7 +53,7 @@ export default function Settings() {
           aags_auto_scan: localStorage.getItem('aags_auto_scan'),
           'aags-refresh-intervals': localStorage.getItem('aags-refresh-intervals'),
         },
-        exportVersion: '1.0.2',
+        exportVersion: '1.0.3',
         exportTime: Date.now(),
       };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -80,9 +80,7 @@ export default function Settings() {
       try {
         const text = await file.text();
         const data = JSON.parse(text);
-        const strip = (arr: any[]) => arr.map((item: any) => { const { id, ...rest } = item; return rest; });
-
-        // 恢复所有 IndexedDB 表
+        // 恢复所有 IndexedDB 表 (保留原始 ID 以维持 strategyId 等外键关联)
         const tables: { key: string; table: any }[] = [
           { key: 'apiConfigs', table: db.apiConfigs },
           { key: 'strategies', table: db.strategies },
@@ -102,9 +100,11 @@ export default function Settings() {
         ];
 
         for (const { key, table } of tables) {
-          if (data[key] && Array.isArray(data[key]) && data[key].length > 0) {
+          if (data[key] && Array.isArray(data[key])) {
             await table.clear();
-            await table.bulkAdd(strip(data[key]));
+            if (data[key].length > 0) {
+              await table.bulkPut(data[key]);
+            }
           }
         }
 
