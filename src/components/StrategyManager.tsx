@@ -915,9 +915,10 @@ export default function StrategyManager() {
                         </button>
                       ) : (
                         <button
-                          className={`${isMobile ? 'p-2' : 'p-2.5'} rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors`}
-                          onClick={() => setShareModalStrategy(s)}
-                          title={t('strategy.shareToPlaza')}
+                          className={`${isMobile ? 'p-2' : 'p-2.5'} rounded-lg ${s.waitingEntry ? 'bg-slate-800/50 text-slate-600 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-700 text-slate-400'} transition-colors`}
+                          onClick={() => { if (!s.waitingEntry) setShareModalStrategy(s); }}
+                          title={s.waitingEntry ? (isZh ? '等待开仓中，暂不可分享' : 'Waiting for entry, cannot share yet') : t('strategy.shareToPlaza')}
+                          disabled={!!s.waitingEntry}
                         >
                           <Share2 className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
                         </button>
