@@ -282,6 +282,8 @@ export interface Strategy {
 
   useCurrentPrice?: boolean;
 
+  waitingEntry?: boolean;
+
   atrPeriod: number;
 
   atrMultiplier: number;

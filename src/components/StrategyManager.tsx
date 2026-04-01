@@ -29,7 +29,8 @@ function formatRuntime(startedAt: number | undefined, t: (key: string) => string
 export default function StrategyManager() {
   const { strategies, setStrategies, updateStrategy, removeStrategy, apiConfig, symbols, tickers } = useStore();
   const isMobile = useIsMobile();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isZh = i18n.language === 'zh' || i18n.language?.startsWith('zh');
   const [showCreator, setShowCreator] = useState(false);
   const [editingStrategy, setEditingStrategy] = useState<Strategy | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -497,13 +498,19 @@ export default function StrategyManager() {
                 </div>
                 <div className={`flex items-center justify-between ${isMobile ? 'px-3' : 'px-5'} pb-1.5`}>
                   <h3 className={`${isMobile ? 'text-base' : 'text-xl'} font-bold`}>{s.symbol.replace('USDT', '')}/USDT</h3>
-                  <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium ${
-                    s.status === 'running' ? 'text-emerald-400' :
-                    s.status === 'paused' ? 'text-yellow-400' :
-                    s.status === 'error' ? 'text-red-400' : 'text-slate-400'
-                  }`}>
-                    {status.text} &gt;
-                  </span>
+                  {s.status === 'running' && s.waitingEntry ? (
+                    <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-amber-400 animate-pulse`}>
+                      {isZh ? '⏳ 等待开仓中' : '⏳ Waiting entry'} &gt;
+                    </span>
+                  ) : (
+                    <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium ${
+                      s.status === 'running' ? 'text-emerald-400' :
+                      s.status === 'paused' ? 'text-yellow-400' :
+                      s.status === 'error' ? 'text-red-400' : 'text-slate-400'
+                    }`}>
+                      {status.text} &gt;
+                    </span>
+                  )}
                 </div>
 
                 {/* === Row 2: Creation time + Runtime === */}
@@ -515,6 +522,25 @@ export default function StrategyManager() {
                     }
                   </p>
                 </div>
+
+                {/* === 等待开仓提示 === */}
+                {s.status === 'running' && s.waitingEntry && (
+                  <div className={`${isMobile ? 'mx-3 mb-2 px-3 py-2' : 'mx-5 mb-3 px-4 py-2.5'} rounded-lg bg-amber-500/10 border border-amber-500/20`}>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-amber-400`}>
+                      {isZh
+                        ? `⏳ 等待开仓中 — 当实时价格 ≤ $${s.centerPrice.toLocaleString()} 时自动开仓`
+                        : `⏳ Waiting for entry — will auto-open when price ≤ $${s.centerPrice.toLocaleString()}`}
+                    </p>
+                    {latestPrice > 0 && (
+                      <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-400 mt-0.5`}>
+                        {isZh ? '当前价格' : 'Current price'}: <span className="text-slate-300 font-mono">${latestPrice.toLocaleString()}</span>
+                        <span className="text-slate-500 ml-2">
+                          ({isZh ? '差' : 'diff'} {((latestPrice - s.centerPrice) / s.centerPrice * 100).toFixed(2)}%)
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* === Row 3: grid — Investment / Price Range / Grid Count === */}
                 <div className={`grid ${isMobile ? 'grid-cols-2 gap-x-2 gap-y-1.5 px-3' : 'grid-cols-3 gap-4 px-5'} pb-2.5`}>

@@ -74,7 +74,39 @@ export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, sy
     throw err;
   }
 
-  // 1.5 按当前价格开仓: 勾选了 useCurrentPrice 或实时价格低于设定开仓价时，用实时价格开仓
+  // 2. 判断是否满足开仓条件
+  // 条件: useCurrentPrice 勾选 → 立即开仓; 手动设价 → 实时价格 <= centerPrice 才开仓
+  const canEntryNow = strategy.useCurrentPrice || currentPrice <= strategy.centerPrice;
+
+  if (canEntryNow) {
+    // 立即开仓
+    await executeEntry(strategy, apiConfig, symbolInfo, currentPrice);
+  } else {
+    // 价格未达到开仓条件 → 进入等待开仓模式
+    log(strategy.id, `当前价格 $${currentPrice} > 开仓价 $${strategy.centerPrice}，进入等待开仓模式`);
+    await db.strategies.update(strategy.id, {
+      status: 'running',
+      waitingEntry: true,
+      startedAt: strategy.startedAt || Date.now(),
+    });
+    const updated = await db.strategies.get(strategy.id);
+    if (updated) _onStrategyUpdate?.(updated);
+
+    // 启动监控循环（会持续检测价格并在条件满足时自动开仓）
+    startMonitorLoop(strategy.id, apiConfig, symbolInfo);
+  }
+}
+
+// ==================== 执行开仓（生成网格+下单） ====================
+async function executeEntry(strategy: Strategy, apiConfig: ApiConfig, symbolInfo?: SymbolInfo, livePrice?: number): Promise<void> {
+  if (!strategy.id) return;
+
+  let currentPrice = livePrice || 0;
+  if (currentPrice <= 0) {
+    currentPrice = await getPrice(strategy.symbol);
+  }
+
+  // 按当前价格开仓: 勾选了 useCurrentPrice 或实时价格低于设定开仓价时，用实时价格
   const shouldUseLivePrice = strategy.useCurrentPrice || (currentPrice > 0 && currentPrice < strategy.centerPrice);
   if (shouldUseLivePrice && currentPrice > 0) {
     const oldCenter = strategy.centerPrice;
@@ -90,17 +122,13 @@ export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, sy
         layer.upperPrice = +(layer.upperPrice * ratio).toPrecision(8);
         layer.lowerPrice = +(layer.lowerPrice * ratio).toPrecision(8);
       }
-      // 同步策略级的上下界
       if (strategy.rangeMode === 'fixed') {
         strategy.upperPrice = +(strategy.upperPrice * ratio).toPrecision(8);
         strategy.lowerPrice = +(strategy.lowerPrice * ratio).toPrecision(8);
       }
     }
 
-    // 启动后锁定价格: 重置 useCurrentPrice，防止下次重启再次覆盖
     strategy.useCurrentPrice = false;
-
-    // 持久化到 DB
     await db.strategies.update(strategy.id, {
       centerPrice: strategy.centerPrice,
       upperPrice: strategy.upperPrice,
@@ -110,7 +138,7 @@ export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, sy
     });
   }
 
-  // 2. 获取趋势
+  // 获取趋势
   let trend: 'bull' | 'bear' | 'neutral' = 'neutral';
   try {
     const klines = await getKlines(strategy.symbol, '1h', 30);
@@ -121,7 +149,7 @@ export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, sy
     log(strategy.id, '趋势检测失败，使用 neutral');
   }
 
-  // 3. 清理旧的 pending 订单
+  // 清理旧的 pending 订单
   const existingOrders = await db.gridOrders.where('strategyId').equals(strategy.id).toArray();
   const pendingOrders = existingOrders.filter(o => o.status === 'placed' && o.binanceOrderId);
   if (pendingOrders.length > 0) {
@@ -130,17 +158,16 @@ export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, sy
       try {
         await cancelOrder(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, order.binanceOrderId!);
       } catch {
-        // 忽略取消失败（可能已成交或已取消）
+        // 忽略取消失败
       }
     }
   }
-  // 只删除非 filled 的订单，保留已成交的历史记录
   const nonFilledOrders = existingOrders.filter(o => o.status !== 'filled');
   if (nonFilledOrders.length > 0) {
     await db.gridOrders.bulkDelete(nonFilledOrders.map(o => o.id!));
   }
 
-  // 4. 为每个启用的层生成网格订单
+  // 生成网格订单
   const allOrders: Omit<GridOrder, 'id'>[] = [];
   for (const layer of strategy.layers) {
     if (!layer.enabled) continue;
@@ -154,11 +181,11 @@ export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, sy
     throw new Error('没有生成任何网格订单');
   }
 
-  // 5. 保存到本地 DB
+  // 保存到本地 DB
   const orderIds = await db.gridOrders.bulkAdd(allOrders as GridOrder[], { allKeys: true });
   const savedOrders: GridOrder[] = allOrders.map((o, i) => ({ ...o, id: orderIds[i] as number })) as GridOrder[];
 
-  // 6. 向交易所下单
+  // 向交易所下单
   const tickSize = symbolInfo?.tickSize || '0.01';
   const stepSize = symbolInfo?.stepSize || '0.00001';
   const pricePrecision = tickSize.indexOf('1') - tickSize.indexOf('.');
@@ -173,7 +200,6 @@ export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, sy
     const price = parseFloat(formatPrice(order.price, pricePrecision));
     const notional = qty * price;
 
-    // 跳过小于最小名义价值的订单
     if (notional < minNotional) {
       await db.gridOrders.update(order.id!, { status: 'cancelled', updatedAt: Date.now() });
       skippedCount++;
@@ -204,24 +230,25 @@ export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, sy
       errorCount++;
     }
 
-    // 避免触发交易所限频
     await sleep(200);
   }
 
   log(strategy.id, `下单完成: 成功 ${placedCount}, 跳过 ${skippedCount}, 失败 ${errorCount}`);
 
-  // 7. 更新策略状态
-  const updateFields = {
-    status: 'running' as const,
-    startedAt: Date.now(),
+  // 更新策略状态: 已开仓, waitingEntry 清除
+  await db.strategies.update(strategy.id, {
+    status: 'running',
+    waitingEntry: false,
+    startedAt: strategy.startedAt || Date.now(),
     usedFund: placedCount > 0 ? strategy.totalFund : 0,
-  };
-  await db.strategies.update(strategy.id, updateFields);
+  });
   const updatedStrategy = await db.strategies.get(strategy.id);
   if (updatedStrategy) _onStrategyUpdate?.(updatedStrategy);
 
-  // 8. 启动订单监控循环
-  startMonitorLoop(strategy.id, apiConfig, symbolInfo);
+  // 启动订单监控循环（如果尚未启动）
+  if (!_executors.get(strategy.id)?.running) {
+    startMonitorLoop(strategy.id, apiConfig, symbolInfo);
+  }
 }
 
 // ==================== 策略广场同步 + 心跳 ====================
@@ -282,9 +309,38 @@ export function startMonitorLoop(strategyId: number, apiConfig: ApiConfig, symbo
   const state: ExecutorState = { running: true, intervalId: null };
   _executors.set(strategyId, state);
 
-  // 立即执行一次: 修复丢失记录 + 检查成交 + 重算利润
+  // 等待开仓价格检测 (每 60 秒打印一次等待日志，避免刷屏)
+  let lastWaitLog = 0;
+  const checkWaitingEntry = async () => {
+    const strategy = await db.strategies.get(strategyId);
+    if (!strategy || !strategy.waitingEntry) return false;
+
+    try {
+      const price = await getPrice(strategy.symbol);
+      if (price <= strategy.centerPrice) {
+        log(strategyId, `[等待开仓] 价格 $${price} <= 开仓价 $${strategy.centerPrice}，开始执行开仓!`);
+        await executeEntry(strategy, apiConfig, symbolInfo, price);
+        return true; // 已开仓
+      } else {
+        const now = Date.now();
+        if (now - lastWaitLog >= 60000) {
+          log(strategyId, `[等待开仓] 当前 $${price} > 开仓价 $${strategy.centerPrice}，继续等待...`);
+          lastWaitLog = now;
+        }
+      }
+    } catch (err: any) {
+      log(strategyId, `[等待开仓] 获取价格失败: ${err.message}`);
+    }
+    return false;
+  };
+
+  // 立即执行一次
   (async () => {
     try {
+      // 先检查是否处于等待开仓状态
+      const entered = await checkWaitingEntry();
+      if (entered) return; // 刚开仓，后续由 checkAndProcessOrders 接管
+
       // 修复: 检查 filled 的 gridOrders 是否缺少 tradeRecord，补全丢失的记录
       await repairMissingTradeRecords(strategyId, apiConfig, symbolInfo);
       await checkAndProcessOrders(strategyId, apiConfig, symbolInfo);
@@ -294,9 +350,13 @@ export function startMonitorLoop(strategyId: number, apiConfig: ApiConfig, symbo
     }
   })();
 
-  // 每 10 秒检查一次订单状态
+  // 每 10 秒检查一次
   state.intervalId = setInterval(async () => {
     try {
+      // 每次轮询先检查是否处于等待开仓状态
+      const entered = await checkWaitingEntry();
+      if (entered) return; // 刚开仓，本轮不再检查订单
+
       await checkAndProcessOrders(strategyId, apiConfig, symbolInfo);
     } catch (err: any) {
       log(strategyId, `监控异常: ${err.message}`);
@@ -1462,6 +1522,16 @@ export async function resumeStrategy(strategyId: number, apiConfig: ApiConfig, s
   if (!strategy) return;
 
   setCurrentExchange(apiConfig.exchange || 'binance');
+
+  // 如果策略处于等待开仓状态，恢复监控循环（会自动检测价格并开仓）
+  if (strategy.waitingEntry) {
+    log(strategyId, '恢复等待开仓监控...');
+    await db.strategies.update(strategyId, { status: 'running' });
+    const resumed = await db.strategies.get(strategyId);
+    if (resumed) _onStrategyUpdate?.(resumed);
+    startMonitorLoop(strategyId, apiConfig, symbolInfo);
+    return;
+  }
 
   // 检查是否有已下的挂单，如果没有则走完整启动流程
   const placedOrders = await db.gridOrders
