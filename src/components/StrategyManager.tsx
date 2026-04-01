@@ -9,7 +9,7 @@ import StrategyCreator from './StrategyCreator';
 import StrategyDetail from './StrategyDetail';
 import StrategyPlaza from './StrategyPlaza';
 import { startStrategy, stopStrategy, stopStrategyWithoutCancel, pauseStrategy, resumeStrategy, setExecutorCallbacks, updateStrategyProfit, repairMissingTradeRecords, syncAllStrategiesOrders } from '../services/strategyExecutor';
-import { shareStrategy, unshareStrategy } from '../services/strategyPlazaService';
+import { shareStrategy, unshareStrategy, syncStrategyData } from '../services/strategyPlazaService';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 function formatRuntime(startedAt: number | undefined, t: (key: string) => string): string {
@@ -149,6 +149,11 @@ export default function StrategyManager() {
     setOperatingIds(prev => new Set(prev).add(strategy.id!));
     try {
       await pauseStrategy(strategy.id!, apiConfig);
+      // 已分享的策略暂停时，在策略广场标记为非运行（隐藏）
+      const code = shareCodes[strategy.id!];
+      if (code) {
+        try { await syncStrategyData(code, { isRunning: false }); } catch { /* 不影响暂停操作 */ }
+      }
     } catch (err: any) {
       setErrors(prev => ({ ...prev, [strategy.id!]: err.message }));
     }
@@ -161,6 +166,17 @@ export default function StrategyManager() {
     setStopConfirm({ strategy, orderCount });
   };
 
+  // 终止后自动删除策略广场分享
+  const autoUnshareOnStop = async (strategyId: number) => {
+    const code = shareCodes[strategyId];
+    if (code) {
+      try {
+        await unshareStrategy(code);
+        removeShareCode(strategyId);
+      } catch { /* 不影响终止操作 */ }
+    }
+  };
+
   const handleStopConfirmCancel = async () => {
     if (!stopConfirm || !apiConfig) return;
     const { strategy } = stopConfirm;
@@ -168,6 +184,7 @@ export default function StrategyManager() {
     setOperatingIds(prev => new Set(prev).add(strategy.id!));
     try {
       await stopStrategy(strategy.id!, apiConfig);
+      await autoUnshareOnStop(strategy.id!);
     } catch (err: any) {
       setErrors(prev => ({ ...prev, [strategy.id!]: err.message }));
     }
@@ -181,6 +198,7 @@ export default function StrategyManager() {
     setOperatingIds(prev => new Set(prev).add(strategy.id!));
     try {
       await stopStrategyWithoutCancel(strategy.id!);
+      await autoUnshareOnStop(strategy.id!);
     } catch (err: any) {
       setErrors(prev => ({ ...prev, [strategy.id!]: err.message }));
     }
@@ -915,10 +933,10 @@ export default function StrategyManager() {
                         </button>
                       ) : (
                         <button
-                          className={`${isMobile ? 'p-2' : 'p-2.5'} rounded-lg ${s.waitingEntry ? 'bg-slate-800/50 text-slate-600 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-700 text-slate-400'} transition-colors`}
-                          onClick={() => { if (!s.waitingEntry) setShareModalStrategy(s); }}
-                          title={s.waitingEntry ? (isZh ? '等待开仓中，暂不可分享' : 'Waiting for entry, cannot share yet') : t('strategy.shareToPlaza')}
-                          disabled={!!s.waitingEntry}
+                          className={`${isMobile ? 'p-2' : 'p-2.5'} rounded-lg ${(s.status !== 'running' || s.waitingEntry) ? 'bg-slate-800/50 text-slate-600 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-700 text-slate-400'} transition-colors`}
+                          onClick={() => { if (s.status === 'running' && !s.waitingEntry) setShareModalStrategy(s); }}
+                          title={s.waitingEntry ? (isZh ? '等待开仓中，暂不可分享' : 'Waiting for entry, cannot share yet') : s.status !== 'running' ? (isZh ? '仅运行中的策略可分享' : 'Only running strategies can be shared') : t('strategy.shareToPlaza')}
+                          disabled={s.status !== 'running' || !!s.waitingEntry}
                         >
                           <Share2 className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
                         </button>
