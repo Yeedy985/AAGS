@@ -206,6 +206,8 @@ export default function StrategyManager() {
   };
 
   const handleDelete = async (id: number) => {
+    // 已分享的策略删除时，自动从策略广场删除分享
+    await autoUnshareOnStop(id);
     await db.strategies.delete(id);
     await db.gridOrders.where('strategyId').equals(id).delete();
     await db.tradeRecords.where('strategyId').equals(id).delete();
