@@ -646,10 +646,15 @@ export default function StrategyCreator({ onCreated, onCancel, editStrategy }: P
           {step === 3 && (
             <>
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-1">
                   <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300`}>{t('creator.entryPrice')}</label>
                   <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? t('creator.entryPriceTrigger') : t('creator.entryPriceTriggerFull')}</span>
                 </div>
+                <p className={`${isMobile ? 'text-[10px]' : 'text-xs'} text-slate-500 mb-2 leading-relaxed`}>
+                  {isZh
+                    ? '勾选"按当前价格开仓"：启动时自动以实时价格作为开仓价。手动设置开仓价：若启动时实时价格低于设定值，也会自动按更低的实时价格开仓，确保更优入场点。'
+                    : 'Check "Use live price": entry price will be the real-time price at start. Manual price: if live price is lower than your setting at start, the system will auto-use the lower live price for a better entry.'}
+                </p>
                 <div className="flex items-center gap-3">
                   <div className="flex-1 relative">
                     <input
