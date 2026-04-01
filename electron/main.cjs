@@ -1,10 +1,56 @@
 const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 const { checkHotUpdate, performHotUpdate, getCurrentFrontendVersion, getLoadPath } = require('./hot-update.cjs');
 
 const isDev = !app.isPackaged;
 let mainWindow = null;
+
+// ==================== 清理过期热更新 ====================
+// 安装新 exe 后，如果 hot-dist 里的版本 <= app 内置版本，说明已过期，需要清理
+// 否则用户装了新 exe 还会加载旧的 hot-dist 前端
+function cleanStaleHotDist() {
+  if (isDev) return;
+  try {
+    const appVer = app.getVersion(); // exe 内置版本
+    const hotDistPath = path.join(app.getPath('userData'), 'hot-dist');
+    const versionFilePath = path.join(app.getPath('userData'), 'hot-update-version.json');
+
+    if (!fs.existsSync(hotDistPath)) return; // 没有热更新目录，无需清理
+
+    let hotVer = '0.0.0';
+    if (fs.existsSync(versionFilePath)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(versionFilePath, 'utf-8'));
+        if (data.version) hotVer = data.version;
+      } catch { /* ignore */ }
+    }
+
+    // 版本比较：如果 hot-dist 版本 <= exe 内置版本，清理掉
+    const isHotNewer = compareVersions(hotVer, appVer);
+    if (!isHotNewer) {
+      console.log(`[updater] Cleaning stale hot-dist: hot=${hotVer}, app=${appVer}`);
+      fs.rmSync(hotDistPath, { recursive: true, force: true });
+      if (fs.existsSync(versionFilePath)) fs.unlinkSync(versionFilePath);
+    }
+  } catch (err) {
+    console.error('[updater] cleanStaleHotDist error:', err.message);
+  }
+}
+
+// 返回 true 如果 a > b
+function compareVersions(a, b) {
+  const pa = a.replace(/^v/, '').split('.').map(Number);
+  const pb = b.replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const va = pa[i] || 0;
+    const vb = pb[i] || 0;
+    if (va > vb) return true;
+    if (va < vb) return false;
+  }
+  return false;
+}
 
 // ==================== Auto Updater ====================
 function setupAutoUpdater() {
@@ -159,6 +205,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  cleanStaleHotDist(); // 安装新版后清理旧的热更新缓存
   createWindow();
   setupAutoUpdater();
 });
