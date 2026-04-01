@@ -1,0 +1,11 @@
+node_modules
+release
+dist
+.git
+*.exe
+*.blockmap
+*.apk
+*.dmg
+android
+capacitor.config.ts
+test-*.cjs
