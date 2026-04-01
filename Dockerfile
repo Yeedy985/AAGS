@@ -7,23 +7,25 @@
 # ============================================================
 
 # Stage 1: 构建前端
-FROM node:18 AS builder
+FROM node:20 AS builder
 
 WORKDIR /app
 
-# 安装 pnpm 和构建工具（tailwindcss/oxide 需要）
+# 安装 pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# 先复制依赖文件，利用 Docker 缓存
+# 先复制依赖文件
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+
+# 忽略平台检查，确保 Linux 原生依赖被正确安装
+RUN pnpm config set node-linker hoisted && pnpm install --no-frozen-lockfile
 
 # 复制源代码并构建
 COPY . .
 RUN pnpm build
 
 # Stage 2: 生产运行（极小镜像）
-FROM node:18-alpine AS production
+FROM node:20-alpine AS production
 
 WORKDIR /app
 
