@@ -282,6 +282,8 @@ export interface Strategy {
 
   useCurrentPrice?: boolean;
 
+  autoBalance?: boolean;
+
   waitingEntry?: boolean;
 
   atrPeriod: number;

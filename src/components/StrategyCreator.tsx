@@ -129,6 +129,7 @@ export default function StrategyCreator({ onCreated, onCancel, editStrategy }: P
   const [autoRebalance, setAutoRebalance] = useState(editStrategy?.autoRebalance ?? true);
   const [currentPrice, setCurrentPrice] = useState(editStrategy?.centerPrice || 0);
   const [useCurrentPrice, setUseCurrentPrice] = useState(editStrategy?.useCurrentPrice ?? false);
+  const [autoBalance, setAutoBalance] = useState(editStrategy?.autoBalance ?? true);
   const [volatility, setVolatility] = useState({ level: '', percent: 0 });
   const [, setLoading] = useState(false);
 
@@ -304,6 +305,7 @@ export default function StrategyCreator({ onCreated, onCancel, editStrategy }: P
         lowerPrice,
         centerPrice: entryPrice || editStrategy.centerPrice,
         useCurrentPrice,
+        autoBalance,
         atrPeriod,
         atrMultiplier,
         layers,
@@ -332,6 +334,7 @@ export default function StrategyCreator({ onCreated, onCancel, editStrategy }: P
         lowerPrice,
         centerPrice: entryPrice || currentPrice,
         useCurrentPrice,
+        autoBalance,
         atrPeriod,
         atrMultiplier,
         layers,
@@ -697,6 +700,24 @@ export default function StrategyCreator({ onCreated, onCancel, editStrategy }: P
                     </button>
                   </p>
                 )}
+
+                {/* 自动建底仓 */}
+                <div className="mt-3 p-3 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                  <label className={`flex items-center gap-2 ${isMobile ? 'text-xs' : 'text-sm'} cursor-pointer select-none`}>
+                    <input
+                      type="checkbox"
+                      checked={autoBalance}
+                      onChange={(e) => setAutoBalance(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+                    />
+                    <span className="text-slate-300 font-medium">{isZh ? '🔄 自动建底仓（推荐）' : '🔄 Auto-balance position (recommended)'}</span>
+                  </label>
+                  <p className={`${isMobile ? 'text-[10px]' : 'text-xs'} text-slate-500 mt-1.5 ml-6 leading-relaxed`}>
+                    {isZh
+                      ? '启动策略时，系统会检查您的持仓：如果已持有足够的币则直接开仓，不会重复购买；如果不足，会自动以市价补买差额部分，确保上方卖单有币可卖。'
+                      : 'On start, the system checks your holdings: if you already have enough coins, no purchase is made; if not, it auto buys only the shortfall at market price to ensure sell orders can be placed.'}
+                  </p>
+                </div>
               </div>
 
               <div>

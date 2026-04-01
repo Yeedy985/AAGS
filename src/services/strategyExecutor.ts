@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { placeOrder, getPrice, cancelOrder, setCurrentExchange, getKlines, queryOrder, getAllOrders, getExchangeInfo, getMyTrades, getOpenOrders } from './binance';
+import { placeOrder, getPrice, cancelOrder, setCurrentExchange, getKlines, queryOrder, getAllOrders, getExchangeInfo, getMyTrades, getOpenOrders, getAccountInfo } from './binance';
 import { generateGridOrders, detectTrend, formatQuantity, formatPrice } from './gridEngine';
 import { syncStrategyData, sendHeartbeat } from './strategyPlazaService';
 import type { Strategy, GridOrder, ApiConfig, SymbolInfo } from '../types';
@@ -179,6 +179,58 @@ async function executeEntry(strategy: Strategy, apiConfig: ApiConfig, symbolInfo
   if (allOrders.length === 0) {
     log(strategy.id, '没有生成任何订单，请检查层配置');
     throw new Error('没有生成任何网格订单');
+  }
+
+  // ==================== 自动建底仓 ====================
+  if (strategy.autoBalance) {
+    const stepSize = symbolInfo?.stepSize || '0.00001';
+    const sellOrders = allOrders.filter(o => o.side === 'sell');
+    if (sellOrders.length > 0) {
+      const totalSellQty = sellOrders.reduce((sum, o) => sum + o.quantity, 0);
+      log(strategy.id, `[自动建底仓] 上方有 ${sellOrders.length} 个卖单，共需 ${totalSellQty.toFixed(6)} ${strategy.baseAsset}`);
+
+      // 查询当前持有的基础资产
+      let currentHolding = 0;
+      try {
+        const accountData = await getAccountInfo(apiConfig.apiKey, apiConfig.apiSecret);
+        const assetBalance = accountData.balances.find(b => b.asset === strategy.baseAsset);
+        if (assetBalance) {
+          currentHolding = parseFloat(assetBalance.free);
+        }
+        log(strategy.id, `[自动建底仓] 当前持有 ${strategy.baseAsset}: ${currentHolding.toFixed(6)} (可用)`);
+      } catch (err: any) {
+        log(strategy.id, `[自动建底仓] 查询余额失败: ${err.message}，将尝试全额买入`);
+      }
+
+      const needToBuy = totalSellQty - currentHolding;
+      if (needToBuy > 0) {
+        const buyQtyStr = formatQuantity(needToBuy, stepSize);
+        const buyQty = parseFloat(buyQtyStr);
+        const estimatedCost = (buyQty * currentPrice).toFixed(2);
+        log(strategy.id, `[自动建底仓] 需要市价买入 ${buyQtyStr} ${strategy.baseAsset}（约 $${estimatedCost}）...`);
+
+        try {
+          const buyResult = await placeOrder({
+            apiKey: apiConfig.apiKey,
+            apiSecretEncrypted: apiConfig.apiSecret,
+            symbol: strategy.symbol,
+            side: 'BUY',
+            type: 'MARKET',
+            quantity: buyQtyStr,
+          });
+          log(strategy.id, `[自动建底仓] ✅ 市价买入成功! orderId: ${buyResult.orderId}, 数量: ${buyQtyStr} ${strategy.baseAsset}`);
+          // 等待订单处理完成
+          await sleep(1000);
+        } catch (err: any) {
+          log(strategy.id, `[自动建底仓] ❌ 市价买入失败: ${err.message}`);
+          throw new Error(`自动建底仓失败: ${err.message}。请手动买入 ${buyQtyStr} ${strategy.baseAsset} 后重试，或取消勾选"自动建底仓"。`);
+        }
+      } else {
+        log(strategy.id, `[自动建底仓] 当前持仓充足（${currentHolding.toFixed(6)} ≥ ${totalSellQty.toFixed(6)}），无需额外买入`);
+      }
+    } else {
+      log(strategy.id, `[自动建底仓] 当前价格在区间顶部，无卖单需要底仓`);
+    }
   }
 
   // 保存到本地 DB
