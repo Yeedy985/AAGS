@@ -1148,21 +1148,21 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
     await sleep(200);
   }
 
-  // ===== 阶段D: 定期网格完整性检查 — 补齐完全缺失的网格 =====
+  // ===== 阶段D: 定期网格完整性检查 — 补齐缺失活跃挂单的网格 =====
   // 每 GRID_INTEGRITY_INTERVAL 做一次，根据策略 layers 配置重新生成完整网格，
-  // 对比已有订单（placed/pending/filled 都算占位），只补齐真正缺失的网格位。
+  // 只有 placed/pending 才算"有活跃挂单"。filled 不算占位（它只是历史成交记录，
+  // 阶段C 会负责为最近的 filled 补反向单，但如果阶段C 也没补上，阶段D 兜底）。
   const now = Date.now();
   const lastCheck = _lastGridIntegrityCheck.get(strategyId) || 0;
   if (now - lastCheck >= GRID_INTEGRITY_INTERVAL) {
     _lastGridIntegrityCheck.set(strategyId, now);
 
-    // 统计所有"有效占位"的网格: placed/pending 是活跃挂单，filled 是已成交（反向单由 Step3b 处理）
-    const allActiveOrders = await db.gridOrders
+    // 统计有活跃挂单(placed/pending)的网格位
+    const allOrders = await db.gridOrders
       .where('strategyId').equals(strategyId)
-      .filter(o => o.status === 'placed' || o.status === 'pending' || o.status === 'filled')
+      .filter(o => o.status === 'placed' || o.status === 'pending')
       .toArray();
-    const occupiedKeys = new Set(allActiveOrders.map(o => `${o.layer}_${o.gridIndex}`));
-    const placedOnlyCount = allActiveOrders.filter(o => o.status === 'placed' || o.status === 'pending').length;
+    const occupiedKeys = new Set(allOrders.map(o => `${o.layer}_${o.gridIndex}`));
 
     let expectedTotal = 0;
     for (const layer of strategy.layers) {
@@ -1171,7 +1171,7 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
     }
 
     if (occupiedKeys.size < expectedTotal) {
-      log(strategyId, `[网格检查] 占位 ${occupiedKeys.size}/${expectedTotal} (挂单${placedOnlyCount}), 开始补齐...`);
+      log(strategyId, `[网格检查] 活跃挂单 ${occupiedKeys.size}/${expectedTotal}, 开始补齐...`);
 
       let curPrice: number;
       try {
