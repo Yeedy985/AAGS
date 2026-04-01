@@ -74,11 +74,13 @@ export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, sy
     throw err;
   }
 
-  // 1.5 按当前价格开仓: 用实时价格更新 centerPrice 并重算各层上下界
-  if (strategy.useCurrentPrice && currentPrice > 0) {
+  // 1.5 按当前价格开仓: 勾选了 useCurrentPrice 或实时价格低于设定开仓价时，用实时价格开仓
+  const shouldUseLivePrice = strategy.useCurrentPrice || (currentPrice > 0 && currentPrice < strategy.centerPrice);
+  if (shouldUseLivePrice && currentPrice > 0) {
     const oldCenter = strategy.centerPrice;
     strategy.centerPrice = currentPrice;
-    log(strategy.id, `[按当前价格开仓] centerPrice: $${oldCenter} → $${currentPrice}`);
+    const reason = strategy.useCurrentPrice ? '用户勾选按当前价格开仓' : `实时价格 $${currentPrice} 低于设定开仓价 $${oldCenter}`;
+    log(strategy.id, `[按当前价格开仓] centerPrice: $${oldCenter} → $${currentPrice} (${reason})`);
 
     // 按比例缩放各层上下界
     if (oldCenter > 0) {
