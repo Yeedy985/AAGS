@@ -95,12 +95,16 @@ export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, sy
       }
     }
 
+    // 启动后锁定价格: 重置 useCurrentPrice，防止下次重启再次覆盖
+    strategy.useCurrentPrice = false;
+
     // 持久化到 DB
     await db.strategies.update(strategy.id, {
       centerPrice: strategy.centerPrice,
       upperPrice: strategy.upperPrice,
       lowerPrice: strategy.lowerPrice,
       layers: strategy.layers,
+      useCurrentPrice: false,
     });
   }
 
