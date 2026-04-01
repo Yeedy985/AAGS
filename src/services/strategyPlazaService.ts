@@ -5,6 +5,17 @@
 import { db } from '../db';
 import { decrypt } from './crypto';
 
+const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
+
+// Web 环境下将 alphinel.com 请求走 /scanapi 代理，Electron 直连
+function resolveUrl(serverUrl: string, path: string): string {
+  const base = serverUrl.replace(/\/$/, '');
+  if (!isElectron && (base === 'https://alphinel.com' || base === 'https://www.alphinel.com')) {
+    return `${window.location.origin}/scanapi${path}`;
+  }
+  return `${base}${path}`;
+}
+
 export interface PlazaStrategyItem {
   shareCode: string;
   nickname: string;
@@ -55,7 +66,7 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<{
   const cfg = await getServiceConfig();
   if (!cfg) throw new Error('未配置公共服务，请先在舆情监控页面配置 AlphaSentinel 服务');
 
-  const url = `${cfg.serverUrl}${path}`;
+  const url = resolveUrl(cfg.serverUrl, path);
   console.error('[Plaza API] >>>', options.method || 'GET', url, 'token:', cfg.authToken.slice(0, 10) + '...');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -79,7 +90,7 @@ async function publicRequest<T>(path: string, options: RequestInit = {}): Promis
   const cfg = await getServiceConfig();
   // 即使没有 auth，仍需要 serverUrl
   const serverUrl = cfg?.serverUrl || 'https://alphinel.com';
-  const url = `${serverUrl.replace(/\/$/, '')}${path}`;
+  const url = resolveUrl(serverUrl, path);
 
   const res = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers as Record<string, string> || {}) } });
   const text = await res.text();
