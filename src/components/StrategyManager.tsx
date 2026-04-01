@@ -350,11 +350,21 @@ export default function StrategyManager() {
         setSyncMsg(msg);
       });
       const totalPlaced = results.reduce((a, r) => a + r.placedAfter, 0);
+      const totalExpected = results.reduce((a, r) => a + r.expectedGrids, 0);
       const repaired = results.filter(r => r.repaired).length;
-      if (repaired > 0) {
-        setSyncMsg(t('strategy.syncDoneRepaired', { count: results.length, placed: totalPlaced, repaired }));
+      const missing = totalExpected - totalPlaced;
+      if (missing > 0) {
+        setSyncMsg(isZh
+          ? `同步完成: ${results.length} 个策略, 挂单 ${totalPlaced}/${totalExpected} (缺 ${missing} 个${repaired > 0 ? `, 已修复 ${repaired} 个策略` : ''})`
+          : `Synced: ${results.length} strategies, ${totalPlaced}/${totalExpected} orders (${missing} missing${repaired > 0 ? `, ${repaired} repaired` : ''})`);
+      } else if (repaired > 0) {
+        setSyncMsg(isZh
+          ? `同步完成: ${results.length} 个策略, ${totalPlaced}/${totalExpected} 个挂单, 修复了 ${repaired} 个策略`
+          : `Synced: ${results.length} strategies, ${totalPlaced}/${totalExpected} orders, ${repaired} repaired`);
       } else {
-        setSyncMsg(t('strategy.syncDoneOk', { count: results.length, placed: totalPlaced }));
+        setSyncMsg(isZh
+          ? `同步完成: ${results.length} 个策略, ${totalPlaced}/${totalExpected} 个挂单, 全部正常`
+          : `Synced: ${results.length} strategies, ${totalPlaced}/${totalExpected} orders, all OK`);
       }
       // 刷新策略列表
       const fresh = await db.strategies.toArray();
@@ -398,7 +408,7 @@ export default function StrategyManager() {
 
       {/* 同步状态提示 */}
       {syncMsg && (
-        <div className={`rounded-lg px-4 py-2.5 text-sm font-medium flex items-center gap-2 ${syncing ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-300' : syncMsg.includes(t('strategy.syncFailed')) ? 'bg-red-500/10 border border-red-500/20 text-red-300' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'}`}>
+        <div className={`rounded-lg px-4 py-2.5 text-sm font-medium flex items-center gap-2 ${syncing ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-300' : syncMsg.includes(t('strategy.syncFailed')) ? 'bg-red-500/10 border border-red-500/20 text-red-300' : (syncMsg.includes('缺') || syncMsg.includes('missing')) ? 'bg-amber-500/10 border border-amber-500/20 text-amber-300' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'}`}>
           {syncing && <Loader2 className="w-4 h-4 animate-spin" />}
           {syncMsg}
         </div>

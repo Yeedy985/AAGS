@@ -1578,6 +1578,7 @@ export interface SyncResult {
   strategyId: number;
   strategyName: string;
   symbol: string;
+  expectedGrids: number;
   placedBefore: number;
   placedAfter: number;
   repaired: boolean;
@@ -1612,14 +1613,25 @@ export async function syncAllStrategiesOrders(
 
     onProgress?.(`正在同步: ${strategy.name} (${strategy.symbol})...`);
 
+    // 计算策略期望的总网格数
+    let expectedGrids = 0;
+    for (const layer of strategy.layers) {
+      if (!layer.enabled) continue;
+      expectedGrids += layer.gridCount;
+    }
+
     try {
       // 1. 修复丢失的成交记录 + 补挂反向单
       await repairMissingTradeRecords(strategy.id, apiConfig, si);
 
-      // 2. 重算利润
+      // 2. 强制立即执行网格完整性检查（重置计时器使阶段D立即运行）
+      _lastGridIntegrityCheck.delete(strategy.id);
+      await checkAndProcessOrders(strategy.id, apiConfig, si);
+
+      // 3. 重算利润
       await updateStrategyProfit(strategy.id);
 
-      // 3. 确保监控循环在运行
+      // 4. 确保监控循环在运行
       if (strategy.status === 'running' && !_executors.get(strategy.id)?.running) {
         startMonitorLoop(strategy.id, apiConfig, si);
       }
@@ -1637,18 +1649,21 @@ export async function syncAllStrategiesOrders(
         strategyId: strategy.id,
         strategyName: strategy.name,
         symbol: strategy.symbol,
+        expectedGrids,
         placedBefore: beforeOrders,
         placedAfter: afterOrders,
         repaired: afterOrders !== beforeOrders,
       });
 
       const diff = afterOrders - beforeOrders;
-      if (diff > 0) {
-        onProgress?.(`${strategy.name}: 补挂了 ${diff} 个订单 (${beforeOrders} → ${afterOrders})`);
+      if (afterOrders < expectedGrids) {
+        onProgress?.(`${strategy.name}: 挂单 ${afterOrders}/${expectedGrids} (缺 ${expectedGrids - afterOrders} 个${diff > 0 ? `, 已补 ${diff}` : ''})`);
+      } else if (diff > 0) {
+        onProgress?.(`${strategy.name}: 补挂了 ${diff} 个订单 (${afterOrders}/${expectedGrids})`);
       } else if (diff < 0) {
-        onProgress?.(`${strategy.name}: 清理了 ${-diff} 个无效订单 (${beforeOrders} → ${afterOrders})`);
+        onProgress?.(`${strategy.name}: 清理了 ${-diff} 个无效订单 (${afterOrders}/${expectedGrids})`);
       } else {
-        onProgress?.(`${strategy.name}: 挂单正常 (${afterOrders} 个)`);
+        onProgress?.(`${strategy.name}: 挂单正常 (${afterOrders}/${expectedGrids})`);
       }
     } catch (err: any) {
       log(strategy.id, `同步失败: ${err.message}`);
@@ -1656,6 +1671,7 @@ export async function syncAllStrategiesOrders(
         strategyId: strategy.id,
         strategyName: strategy.name,
         symbol: strategy.symbol,
+        expectedGrids,
         placedBefore: beforeOrders,
         placedAfter: beforeOrders,
         repaired: false,
