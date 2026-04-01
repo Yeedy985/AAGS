@@ -7,7 +7,7 @@
 # ============================================================
 
 # Stage 1: 构建前端
-FROM node:18-slim AS builder
+FROM node:18 AS builder
 
 WORKDIR /app
 
