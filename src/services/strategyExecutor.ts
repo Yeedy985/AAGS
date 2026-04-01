@@ -74,6 +74,36 @@ export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, sy
     throw err;
   }
 
+  // 1.5 按当前价格开仓: 用实时价格更新 centerPrice 并重算各层上下界
+  if (strategy.useCurrentPrice && currentPrice > 0) {
+    const oldCenter = strategy.centerPrice;
+    strategy.centerPrice = currentPrice;
+    log(strategy.id, `[按当前价格开仓] centerPrice: $${oldCenter} → $${currentPrice}`);
+
+    // 按比例缩放各层上下界
+    if (oldCenter > 0) {
+      const ratio = currentPrice / oldCenter;
+      for (const layer of strategy.layers) {
+        if (!layer.enabled) continue;
+        layer.upperPrice = +(layer.upperPrice * ratio).toPrecision(8);
+        layer.lowerPrice = +(layer.lowerPrice * ratio).toPrecision(8);
+      }
+      // 同步策略级的上下界
+      if (strategy.rangeMode === 'fixed') {
+        strategy.upperPrice = +(strategy.upperPrice * ratio).toPrecision(8);
+        strategy.lowerPrice = +(strategy.lowerPrice * ratio).toPrecision(8);
+      }
+    }
+
+    // 持久化到 DB
+    await db.strategies.update(strategy.id, {
+      centerPrice: strategy.centerPrice,
+      upperPrice: strategy.upperPrice,
+      lowerPrice: strategy.lowerPrice,
+      layers: strategy.layers,
+    });
+  }
+
   // 2. 获取趋势
   let trend: 'bull' | 'bear' | 'neutral' = 'neutral';
   try {

@@ -41,7 +41,8 @@ const defaultLayers: GridLayerConfig[] = [
 export default function StrategyCreator({ onCreated, onCancel, editStrategy }: Props) {
   const { symbols, setSymbols, apiConfig } = useStore();
   const isMobile = useIsMobile();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isZh = i18n.language === 'zh' || i18n.language?.startsWith('zh');
   const savedConfigs = useLiveQuery(() => db.apiConfigs.toArray(), []);
   const [selectedAccount, setSelectedAccount] = useState<ApiConfig | null>(null);
 
@@ -127,6 +128,7 @@ export default function StrategyCreator({ onCreated, onCancel, editStrategy }: P
   const [endMode, setEndMode] = useState<EndMode>(editStrategy?.endMode || 'keep_position');
   const [autoRebalance, setAutoRebalance] = useState(editStrategy?.autoRebalance ?? true);
   const [currentPrice, setCurrentPrice] = useState(editStrategy?.centerPrice || 0);
+  const [useCurrentPrice, setUseCurrentPrice] = useState(editStrategy?.useCurrentPrice ?? false);
   const [volatility, setVolatility] = useState({ level: '', percent: 0 });
   const [, setLoading] = useState(false);
 
@@ -155,6 +157,24 @@ export default function StrategyCreator({ onCreated, onCancel, editStrategy }: P
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEdit]);
+
+  // 实时价格轮询: 当勾选"按当前价格开仓"时，每 3 秒刷新价格
+  useEffect(() => {
+    if (!useCurrentPrice || !symbol) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const price = await getPrice(symbol);
+        if (!cancelled) {
+          setCurrentPrice(price);
+          setEntryPrice(price);
+        }
+      } catch { /* ignore */ }
+    };
+    poll(); // 立即执行一次
+    const timer = setInterval(poll, 3000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [useCurrentPrice, symbol]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -283,6 +303,7 @@ export default function StrategyCreator({ onCreated, onCancel, editStrategy }: P
         upperPrice,
         lowerPrice,
         centerPrice: currentPrice || editStrategy.centerPrice,
+        useCurrentPrice,
         atrPeriod,
         atrMultiplier,
         layers,
@@ -310,6 +331,7 @@ export default function StrategyCreator({ onCreated, onCancel, editStrategy }: P
         upperPrice,
         lowerPrice,
         centerPrice: currentPrice,
+        useCurrentPrice,
         atrPeriod,
         atrMultiplier,
         layers,
@@ -628,15 +650,38 @@ export default function StrategyCreator({ onCreated, onCancel, editStrategy }: P
                   <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300`}>{t('creator.entryPrice')}</label>
                   <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? t('creator.entryPriceTrigger') : t('creator.entryPriceTriggerFull')}</span>
                 </div>
-                <input
-                  className="input-field"
-                  type="number"
-                  step="0.01"
-                  placeholder={t('creator.entryPricePlaceholder')}
-                  value={entryPrice || ''}
-                  onChange={(e) => setEntryPrice(Number(e.target.value))}
-                />
-                {currentPrice > 0 && entryPrice !== currentPrice && (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 relative">
+                    <input
+                      className={`input-field w-full ${useCurrentPrice ? 'opacity-70 cursor-not-allowed' : ''}`}
+                      type="number"
+                      step="0.01"
+                      placeholder={t('creator.entryPricePlaceholder')}
+                      value={entryPrice || ''}
+                      onChange={(e) => { if (!useCurrentPrice) setEntryPrice(Number(e.target.value)); }}
+                      readOnly={useCurrentPrice}
+                    />
+                    {useCurrentPrice && currentPrice > 0 && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-emerald-400 animate-pulse">LIVE</span>
+                    )}
+                  </div>
+                  <label className={`flex items-center gap-2 shrink-0 ${isMobile ? 'text-xs' : 'text-sm'} cursor-pointer select-none`}>
+                    <input
+                      type="checkbox"
+                      checked={useCurrentPrice}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setUseCurrentPrice(checked);
+                        if (checked && currentPrice > 0) {
+                          setEntryPrice(currentPrice);
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+                    />
+                    <span className="text-slate-300 whitespace-nowrap">{isZh ? '按当前价格开仓' : 'Use live price'}</span>
+                  </label>
+                </div>
+                {!useCurrentPrice && currentPrice > 0 && entryPrice !== currentPrice && (
                   <p className="text-sm text-slate-500 mt-1">
                     {t('creator.currentMarketPrice')}: <span className="text-slate-400 font-mono">${currentPrice.toLocaleString()}</span>
                     <button

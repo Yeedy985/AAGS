@@ -280,6 +280,8 @@ export interface Strategy {
 
   centerPrice: number;
 
+  useCurrentPrice?: boolean;
+
   atrPeriod: number;
 
   atrMultiplier: number;
