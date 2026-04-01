@@ -231,6 +231,54 @@ async function executeEntry(strategy: Strategy, apiConfig: ApiConfig, symbolInfo
     } else {
       log(strategy.id, `[自动建底仓] 当前价格在区间顶部，无卖单需要底仓`);
     }
+
+    // ---- 反向平衡：检查 USDT 是否足够挂买单，不够则卖币补齐 ----
+    const buyOrders = allOrders.filter(o => o.side === 'buy');
+    if (buyOrders.length > 0) {
+      const totalBuyCost = buyOrders.reduce((sum, o) => sum + o.quantity * o.price, 0);
+      log(strategy.id, `[自动平衡] 下方有 ${buyOrders.length} 个买单，共需约 ${totalBuyCost.toFixed(2)} USDT`);
+
+      let currentUsdt = 0;
+      try {
+        const accountData = await getAccountInfo(apiConfig.apiKey, apiConfig.apiSecret);
+        const usdtBalance = accountData.balances.find(b => b.asset === 'USDT');
+        if (usdtBalance) {
+          currentUsdt = parseFloat(usdtBalance.free);
+        }
+        log(strategy.id, `[自动平衡] 当前可用 USDT: ${currentUsdt.toFixed(2)}`);
+      } catch (err: any) {
+        log(strategy.id, `[自动平衡] 查询 USDT 余额失败: ${err.message}`);
+      }
+
+      const usdtShortfall = totalBuyCost - currentUsdt;
+      if (usdtShortfall > 0) {
+        // 需要卖币来补齐 USDT
+        const sellQtyNeeded = usdtShortfall / currentPrice;
+        const stepSize = symbolInfo?.stepSize || '0.00001';
+        const sellQtyStr = formatQuantity(sellQtyNeeded, stepSize);
+        const sellQty = parseFloat(sellQtyStr);
+        if (sellQty > 0) {
+          log(strategy.id, `[自动平衡] USDT 缺口 $${usdtShortfall.toFixed(2)}，需市价卖出 ${sellQtyStr} ${strategy.baseAsset}...`);
+          try {
+            const sellResult = await placeOrder({
+              apiKey: apiConfig.apiKey,
+              apiSecretEncrypted: apiConfig.apiSecret,
+              symbol: strategy.symbol,
+              side: 'SELL',
+              type: 'MARKET',
+              quantity: sellQtyStr,
+            });
+            log(strategy.id, `[自动平衡] ✅ 市价卖出成功! orderId: ${sellResult.orderId}, 数量: ${sellQtyStr} ${strategy.baseAsset}`);
+            await sleep(1000);
+          } catch (err: any) {
+            log(strategy.id, `[自动平衡] ❌ 市价卖出失败: ${err.message}`);
+            throw new Error(`自动平衡失败: ${err.message}。请手动卖出 ${sellQtyStr} ${strategy.baseAsset} 换取 USDT 后重试，或取消勾选"自动建底仓"。`);
+          }
+        }
+      } else {
+        log(strategy.id, `[自动平衡] USDT 充足（${currentUsdt.toFixed(2)} ≥ ${totalBuyCost.toFixed(2)}），无需卖币`);
+      }
+    }
   }
 
   // 保存到本地 DB

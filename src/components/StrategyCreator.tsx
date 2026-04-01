@@ -714,8 +714,8 @@ export default function StrategyCreator({ onCreated, onCancel, editStrategy }: P
                   </label>
                   <p className={`${isMobile ? 'text-[10px]' : 'text-xs'} text-slate-500 mt-1.5 ml-6 leading-relaxed`}>
                     {isZh
-                      ? '启动策略时，系统会检查您的持仓：如果已持有足够的币则直接开仓，不会重复购买；如果不足，会自动以市价补买差额部分，确保上方卖单有币可卖。'
-                      : 'On start, the system checks your holdings: if you already have enough coins, no purchase is made; if not, it auto buys only the shortfall at market price to ensure sell orders can be placed.'}
+                      ? '启动策略时，系统会自动平衡您的资产：币不足时市价补买，确保上方卖单有币可卖；USDT 不足时市价卖出多余的币，确保下方买单有 U 可挂。已持有足够资产则不做任何操作。'
+                      : 'On start, the system auto-balances your assets: buys coins if short for sell orders above; sells coins if short on USDT for buy orders below. No action if holdings are already sufficient.'}
                   </p>
                 </div>
               </div>
