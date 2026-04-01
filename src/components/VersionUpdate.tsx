@@ -20,7 +20,7 @@ interface GitHubRelease {
 
 const GITHUB_OWNER = 'Yeedy985';
 const GITHUB_REPO = 'AAGS';
-const FALLBACK_VERSION = '1.0.3';
+const FALLBACK_VERSION = '1.0.5';
 
 function parseVersion(v: string): number[] {
   return v.replace(/^v/, '').split('.').map(Number);
