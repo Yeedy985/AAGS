@@ -7,11 +7,11 @@
 # ============================================================
 
 # Stage 1: 构建前端
-FROM node:18-alpine AS builder
+FROM node:18-slim AS builder
 
 WORKDIR /app
 
-# 安装 pnpm
+# 安装 pnpm 和构建工具（tailwindcss/oxide 需要）
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # 先复制依赖文件，利用 Docker 缓存
