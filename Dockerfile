@@ -32,6 +32,7 @@ WORKDIR /app
 # 只复制需要的文件
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.cjs ./server.cjs
+COPY --from=builder /app/package.json ./package.json
 
 EXPOSE 8080
 
