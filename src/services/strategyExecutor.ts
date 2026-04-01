@@ -1090,17 +1090,19 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
 
   // ===== 阶段D: 定期网格完整性检查 — 补齐完全缺失的网格 =====
   // 每 GRID_INTEGRITY_INTERVAL 做一次，根据策略 layers 配置重新生成完整网格，
-  // 对比已有 placed 订单，缺失的重新下单。
+  // 对比已有订单（placed/pending/filled 都算占位），只补齐真正缺失的网格位。
   const now = Date.now();
   const lastCheck = _lastGridIntegrityCheck.get(strategyId) || 0;
   if (now - lastCheck >= GRID_INTEGRITY_INTERVAL) {
     _lastGridIntegrityCheck.set(strategyId, now);
 
-    const currentPlacedOrders = await db.gridOrders
+    // 统计所有"有效占位"的网格: placed/pending 是活跃挂单，filled 是已成交（反向单由 Step3b 处理）
+    const allActiveOrders = await db.gridOrders
       .where('strategyId').equals(strategyId)
-      .filter(o => o.status === 'placed' || o.status === 'pending')
+      .filter(o => o.status === 'placed' || o.status === 'pending' || o.status === 'filled')
       .toArray();
-    const placedKeys = new Set(currentPlacedOrders.map(o => `${o.layer}_${o.gridIndex}`));
+    const occupiedKeys = new Set(allActiveOrders.map(o => `${o.layer}_${o.gridIndex}`));
+    const placedOnlyCount = allActiveOrders.filter(o => o.status === 'placed' || o.status === 'pending').length;
 
     let expectedTotal = 0;
     for (const layer of strategy.layers) {
@@ -1108,8 +1110,8 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
       expectedTotal += layer.gridCount;
     }
 
-    if (placedKeys.size < expectedTotal) {
-      log(strategyId, `[网格检查] 挂单 ${placedKeys.size}/${expectedTotal}, 开始补齐...`);
+    if (occupiedKeys.size < expectedTotal) {
+      log(strategyId, `[网格检查] 占位 ${occupiedKeys.size}/${expectedTotal} (挂单${placedOnlyCount}), 开始补齐...`);
 
       let curPrice: number;
       try {
@@ -1133,7 +1135,7 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
 
           for (const order of expectedOrders) {
             const key = `${order.layer}_${order.gridIndex}`;
-            if (placedKeys.has(key)) continue;
+            if (occupiedKeys.has(key)) continue;
 
             const qty = parseFloat(formatQuantity(order.quantity, stepSize));
             const price = parseFloat(formatPrice(order.price, pricePrecision));
@@ -1167,7 +1169,7 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
               });
-              placedKeys.add(key);
+              occupiedKeys.add(key);
               filled++;
             } catch (err: any) {
               log(strategyId, `[网格检查] 补挂失败 ${key}: ${err.message}`);
@@ -1177,7 +1179,7 @@ async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symb
         }
 
         if (filled > 0) {
-          log(strategyId, `[网格检查] 补齐完成: +${filled} 个挂单, 当前 ${placedKeys.size}/${expectedTotal}`);
+          log(strategyId, `[网格检查] 补齐完成: +${filled} 个挂单, 当前 ${occupiedKeys.size}/${expectedTotal}`);
         }
       }
     }
@@ -1480,6 +1482,9 @@ export async function resumeStrategy(strategyId: number, apiConfig: ApiConfig, s
   await db.strategies.update(strategyId, { status: 'running' });
   const resumed = await db.strategies.get(strategyId);
   if (resumed) _onStrategyUpdate?.(resumed);
+
+  // 重置网格完整性检查计时器，使恢复后立即执行一次补齐检查
+  _lastGridIntegrityCheck.delete(strategyId);
 
   startMonitorLoop(strategyId, apiConfig, symbolInfo);
 }
